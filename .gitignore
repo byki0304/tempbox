@@ -56,6 +56,7 @@ functions/data/
 *service-account*.json
 *firebase-adminsdk*.json
 .vercel/
+.flutter-sdk/
 tool/verify-firebase.js
 tool/verify-callable.js
 tool/cleanup-probes.js
