@@ -130,36 +130,44 @@ class FirebaseBoxApi implements BoxApi {
   }
 
   @override
-  Future<BoxItem> createMessage(String text, String requestId) async {
-    final json = await _call('createMessageItem', {'text': text, 'clientRequestId': requestId});
+  Future<BoxItem> createMessage(String text, String requestId, {String? deviceId}) async {
+    final json = await _call('createMessageItem', {'text': text, 'clientRequestId': requestId, 'originDeviceId': deviceId});
     return BoxItem.fromJson(Map<String, dynamic>.from(json['item'] as Map));
   }
 
   @override
-  Future<UploadTicket> beginFile({required String fileName, String? text, required int declaredBytes, required String requestId}) async {
+  Future<UploadTicket> beginFile({required String fileName, String? text, required int declaredBytes, required String requestId, String? deviceId}) async {
     final json = await _call('beginFileUpload', {
       'fileName': fileName,
       'text': text,
       'declaredBytes': declaredBytes,
       'clientRequestId': requestId,
+      'originDeviceId': deviceId,
     });
     return UploadTicket.fromJson(json);
   }
 
   @override
   Future<void> putBytes(UploadTicket ticket, Uint8List bytes, Uint8List? thumb) async {
-    if (ticket.uploadUrl != null) {
-      final sent = await http.put(Uri.parse(ticket.uploadUrl!), body: bytes, headers: {'Cache-Control': 'no-store'});
-      if (sent.statusCode >= 400) throw ApiException('invalid');
-      if (thumb != null && ticket.thumbUrl != null) {
-        await http.put(Uri.parse(ticket.thumbUrl!), body: thumb);
+    final path = ticket.storagePath;
+    if (path != null && path.isNotEmpty) {
+      try {
+        await _storage.ref(path).putData(bytes, SettableMetadata(contentType: 'application/octet-stream', cacheControl: 'private, no-store'));
+        if (thumb != null) {
+          await _storage.ref('thumbs/${ticket.uploadId}.webp').putData(thumb, SettableMetadata(contentType: 'image/webp', cacheControl: 'private, no-store'));
+        }
+      } on FirebaseException catch (error) {
+        final code = error.code.replaceFirst('storage/', '');
+        throw ApiException(code == 'unauthorized' || code == 'quota-exceeded' ? 'plan_capacity' : 'invalid');
       }
       return;
     }
-    if (ticket.storagePath == null) throw ApiException('invalid');
-    await _storage.ref(ticket.storagePath).putData(bytes, SettableMetadata(contentType: 'application/octet-stream', cacheControl: 'private, no-store'));
-    if (thumb != null) {
-      await _storage.ref('thumbs/${ticket.uploadId}.webp').putData(thumb, SettableMetadata(contentType: 'image/webp', cacheControl: 'private, no-store'));
+    if (ticket.uploadUrl == null) throw ApiException('invalid');
+    final sent = await http.put(Uri.parse(ticket.uploadUrl!), body: bytes, headers: {'Cache-Control': 'no-store'});
+    if (sent.statusCode >= 400) throw ApiException('invalid');
+    if (thumb != null && ticket.thumbUrl != null) {
+      final thumbSent = await http.put(Uri.parse(ticket.thumbUrl!), body: thumb, headers: {'Cache-Control': 'no-store'});
+      if (thumbSent.statusCode >= 400) throw ApiException('invalid');
     }
   }
 
@@ -174,7 +182,7 @@ class FirebaseBoxApi implements BoxApi {
 
   @override
   Future<Uint8List> download(String url) async {
-    final response = await http.get(Uri.parse(url), headers: {'Cache-Control': 'no-store'});
+    final response = await http.get(Uri.parse(url));
     if (response.statusCode >= 400) throw ApiException('expired');
     return response.bodyBytes;
   }
@@ -190,8 +198,8 @@ class FirebaseBoxApi implements BoxApi {
   }
 
   @override
-  Future<Profile> setBackend(String backend, int? driveMaxBytes) async {
-    final json = await _call('setStorageBackend', {'storageBackend': backend, 'driveMaxBytes': driveMaxBytes});
+  Future<Profile> setBackend(String backend, int? driveMaxBytes, {int? cloudMaxBytes}) async {
+    final json = await _call('setStorageBackend', {'storageBackend': backend, 'driveMaxBytes': driveMaxBytes, 'cloudMaxBytes': cloudMaxBytes});
     return Profile.fromJson(Map<String, dynamic>.from(json['profile'] as Map));
   }
 

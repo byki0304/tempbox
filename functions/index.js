@@ -69,7 +69,13 @@ function wrap(name) {
       return result;
     } catch (error) {
       const code = typeof error.code === 'string' && error.code ? error.code : 'invalid';
-      console.log(JSON.stringify({ uid, itemId, code, at: new Date().toISOString() }));
+      console.log(JSON.stringify({
+        uid,
+        itemId,
+        code,
+        message: String(error.message || '').slice(0, 180),
+        at: new Date().toISOString(),
+      }));
       throw new HttpsError(code === 'unauthenticated' ? 'unauthenticated' : 'failed-precondition', code, { code });
     }
   });

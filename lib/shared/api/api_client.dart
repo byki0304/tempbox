@@ -40,15 +40,15 @@ abstract class BoxApi {
   Future<BoxOpen> createBox({bool fresh = false});
   Future<BoxOpen> redeem(String code);
   Future<BoxHome> listItems();
-  Future<BoxItem> createMessage(String text, String requestId);
-  Future<UploadTicket> beginFile({required String fileName, String? text, required int declaredBytes, required String requestId});
+  Future<BoxItem> createMessage(String text, String requestId, {String? deviceId});
+  Future<UploadTicket> beginFile({required String fileName, String? text, required int declaredBytes, required String requestId, String? deviceId});
   Future<void> putBytes(UploadTicket ticket, Uint8List bytes, Uint8List? thumb);
   Future<BoxItem> complete(UploadTicket ticket);
   Future<ClaimResult> claim(String itemId);
   Future<Uint8List> download(String url);
   Future<void> ack(String itemId, String token);
   Future<void> deleteItem(String itemId, {required bool confirm});
-  Future<Profile> setBackend(String backend, int? driveMaxBytes);
+  Future<Profile> setBackend(String backend, int? driveMaxBytes, {int? cloudMaxBytes});
   Future<void> changePassword(String current, String next);
   Future<void> deleteAccount();
   Future<({List<StatRow> rows, List<StatBar> bars})> stats(int days);

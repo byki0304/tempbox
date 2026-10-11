@@ -10,13 +10,25 @@ import '../app/config.dart';
 import '../app/i18n.dart';
 import '../entities/models.dart';
 import '../shared/api/api_client.dart';
-import '../shared/api/firebase_gate.dart' if (dart.library.html) '../shared/api/firebase_gate_web.dart';
+import '../shared/api/firebase_gate.dart'
+    if (dart.library.html) '../shared/api/firebase_gate_web.dart';
 import '../shared/api/local_api.dart';
 import '../shared/format.dart';
 import '../shared/web/web_tools.dart';
 import '../shared/web/web_tools_api.dart';
 
-enum Screen { boot, welcome, login, signup, nickname, guest, box, help, me, admin }
+enum Screen {
+  boot,
+  welcome,
+  login,
+  signup,
+  nickname,
+  guest,
+  box,
+  help,
+  me,
+  admin,
+}
 
 class PendingSend {
   PendingSend(this.id, this.label);
@@ -36,6 +48,7 @@ class AppController extends ChangeNotifier {
   Profile? profile;
   BoxRecord? box;
   List<BoxItem> items = [];
+  final Set<String> selectedIds = {};
   List<PendingSend> pending = [];
   String? live;
   String? fieldError;
@@ -45,9 +58,9 @@ class AppController extends ChangeNotifier {
   String draft = '';
   List<PickedFile> files = [];
   String? pairingCode;
+  String deviceId = '';
   String? armedDelete;
   bool withdrawArmed = false;
-  bool nicknameArmed = false;
   final usedNames = <String>{};
   List<StatRow> statRows = [];
   List<StatBar> statBars = [];
@@ -67,6 +80,7 @@ class AppController extends ChangeNotifier {
     l10n = L10n(locale);
     pairingCode = tools.read('tempbox.code');
     draft = tools.read('tempbox.draft') ?? '';
+    deviceId = _deviceId();
     tools.listenPop((path) {
       if (screen == Screen.boot) return;
       _applyPath(path, sync: false);
@@ -82,7 +96,7 @@ class AppController extends ChangeNotifier {
         final home = await api!.listItems();
         profile = home.profile;
         box = home.box;
-        items = home.items;
+        _replaceItems(home.items);
       } on ApiException {
         profile = null;
       } catch (_) {
@@ -97,7 +111,8 @@ class AppController extends ChangeNotifier {
   }
 
   Future<void> _tick() async {
-    if (profile != null && DateTime.now().difference(lastActivity) > const Duration(minutes: 30)) {
+    if (profile != null &&
+        DateTime.now().difference(lastActivity) > const Duration(minutes: 30)) {
       await logout(idle: true);
       return;
     }
@@ -105,7 +120,7 @@ class AppController extends ChangeNotifier {
     if (screen == Screen.box && api != null && !offline && profile != null) {
       try {
         final home = await api!.listItems();
-        items = home.items;
+        _replaceItems(home.items);
         box = home.box;
         profile = home.profile;
         notifyListeners();
@@ -235,8 +250,14 @@ class AppController extends ChangeNotifier {
       }
     } else if (profile!.nickname == null || profile!.nickname!.isEmpty) {
       screen = Screen.nickname;
-    } else if (box == null && profile!.isGuest && normalized != '/help' && normalized != '/me') {
-      screen = normalized == '/guest' || normalized == '/box' || normalized == '/' ? Screen.guest : Screen.guest;
+    } else if (box == null &&
+        profile!.isGuest &&
+        normalized != '/help' &&
+        normalized != '/me') {
+      screen =
+          normalized == '/guest' || normalized == '/box' || normalized == '/'
+          ? Screen.guest
+          : Screen.guest;
     } else {
       switch (normalized) {
         case '/help':
@@ -262,7 +283,7 @@ class AppController extends ChangeNotifier {
     final home = await api!.listItems();
     profile = home.profile;
     box = home.box;
-    items = home.items;
+    _replaceItems(home.items);
     notifyListeners();
   }
 
@@ -270,7 +291,6 @@ class AppController extends ChangeNotifier {
     profile = result.profile;
     fieldError = null;
     if (profile!.nickname == null || profile!.nickname!.isEmpty) {
-      nicknameArmed = false;
       go(Screen.nickname);
       return;
     }
@@ -281,7 +301,7 @@ class AppController extends ChangeNotifier {
     final home = await api!.listItems();
     profile = home.profile;
     box = home.box;
-    items = home.items;
+    _replaceItems(home.items);
     if (box == null && profile!.isGuest) {
       go(Screen.guest);
       return;
@@ -321,7 +341,9 @@ class AppController extends ChangeNotifier {
       notifyListeners();
       return;
     }
-    if (kind != 'google' && kind == 'phone' && normalizePhone(country ?? '+82', national ?? '') == null) {
+    if (kind != 'google' &&
+        kind == 'phone' &&
+        normalizePhone(country ?? '+82', national ?? '') == null) {
       fieldError = l10n.tr('phoneInvalid');
       notifyListeners();
       return;
@@ -350,13 +372,31 @@ class AppController extends ChangeNotifier {
       final linking = profile?.isGuest == true && signup;
       final AuthResult result;
       if (linking) {
-        result = await api!.link(kind: kind, email: email, password: password, country: country, national: national);
+        result = await api!.link(
+          kind: kind,
+          email: email,
+          password: password,
+          country: country,
+          national: national,
+        );
       } else if (signup) {
-        result = await api!.signup(kind: kind, email: email, password: password, country: country, national: national);
+        result = await api!.signup(
+          kind: kind,
+          email: email,
+          password: password,
+          country: country,
+          national: national,
+        );
       } else if (kind == 'google') {
         result = await api!.google();
       } else {
-        result = await api!.login(kind: kind, email: email, password: password, country: country, national: national);
+        result = await api!.login(
+          kind: kind,
+          email: email,
+          password: password,
+          country: country,
+          national: national,
+        );
       }
       await _enter(result);
     } catch (error) {
@@ -391,16 +431,10 @@ class AppController extends ChangeNotifier {
     }
   }
 
-  Future<void> saveNickname(String value, {bool? confirmed, bool stay = false}) async {
-    final confirm = confirmed ?? nicknameArmed;
-    if (!confirm) {
-      if (!validNickname(value.trim())) {
-        fieldError = l10n.tr('nicknameInvalid');
-        notifyListeners();
-        return;
-      }
-      nicknameArmed = true;
-      fieldError = null;
+  Future<void> saveNickname(String value, {bool stay = false}) async {
+    final nickname = value.trim();
+    if (!validNickname(nickname)) {
+      fieldError = l10n.tr('nicknameInvalid');
       notifyListeners();
       return;
     }
@@ -409,10 +443,10 @@ class AppController extends ChangeNotifier {
       return;
     }
     busy = true;
+    fieldError = null;
     notifyListeners();
     try {
-      profile = await api!.setNickname(value.trim(), confirm: true);
-      nicknameArmed = false;
+      profile = await api!.setNickname(nickname, confirm: true);
       fieldError = null;
       if (stay) {
         notifyListeners();
@@ -432,27 +466,12 @@ class AppController extends ChangeNotifier {
       say(l10n.tr('offline'));
       return;
     }
-    final opened = await api!.createBox(fresh: true);
-    box = opened.box;
-    _rememberCode(opened);
-    await refresh();
-    go(Screen.box);
-  }
-
-  Future<void> redeem(String code) async {
-    if (api == null || offline) {
-      say(l10n.tr('offline'));
-      return;
-    }
     busy = true;
+    fieldError = null;
     notifyListeners();
     try {
-      final opened = await api!.redeem(code);
-      box = opened.box;
-      pairingCode = code.toUpperCase();
-      await refresh();
-      go(Screen.box);
-      fieldError = null;
+      final opened = await api!.createBox(fresh: true);
+      await _enterBox(opened, opened.pairingCodeDisplay);
     } catch (error) {
       fieldError = explain(error);
     } finally {
@@ -461,13 +480,49 @@ class AppController extends ChangeNotifier {
     }
   }
 
+  Future<void> redeem(String code) async {
+    if (api == null || offline) {
+      say(l10n.tr('offline'));
+      return;
+    }
+    busy = true;
+    fieldError = null;
+    notifyListeners();
+    try {
+      final opened = await api!.redeem(code);
+      await _enterBox(opened, displayPairingCode(code));
+    } catch (error) {
+      fieldError = explain(error);
+    } finally {
+      busy = false;
+      notifyListeners();
+    }
+  }
+
+  Future<void> _enterBox(BoxOpen opened, String? code) async {
+    box = opened.box;
+    if (code != null && code.isNotEmpty) {
+      pairingCode = code;
+      tools.write('tempbox.code', pairingCode);
+    }
+    try {
+      await refresh();
+    } catch (_) {}
+    if (box == null) box = opened.box;
+    fieldError = null;
+    go(Screen.box);
+  }
+
   void setDraft(String value) {
     draft = value;
     tools.write('tempbox.draft', value);
     notifyListeners();
   }
 
-  Future<void> addFiles(List<PickedFile> incoming, {bool camera = false}) async {
+  Future<void> addFiles(
+    List<PickedFile> incoming, {
+    bool camera = false,
+  }) async {
     if (camera) {
       final picked = await tools.pick(camera: true);
       incoming = picked;
@@ -484,9 +539,30 @@ class AppController extends ChangeNotifier {
     notifyListeners();
   }
 
+  String _deviceId() {
+    final saved = tools.read('tempbox.device');
+    if (saved != null && RegExp(r'^[A-Za-z0-9]{16,64}$').hasMatch(saved)) return saved;
+    final random = Random.secure();
+    final created = List.generate(16, (_) => random.nextInt(256).toRadixString(16).padLeft(2, '0')).join();
+    tools.write('tempbox.device', created);
+    return created;
+  }
+
+  bool sentFromHere(BoxItem item) {
+    final origin = item.originDeviceId;
+    if (origin != null && origin.isNotEmpty) return origin == deviceId;
+    final author = item.authorUid;
+    final me = profile?.uid;
+    if (author != null && author.isNotEmpty && me != null && me.isNotEmpty) return author == me;
+    return true;
+  }
+
   String _requestId() {
     final random = Random.secure();
-    return List.generate(16, (_) => random.nextInt(256).toRadixString(16).padLeft(2, '0')).join();
+    return List.generate(
+      16,
+      (_) => random.nextInt(256).toRadixString(16).padLeft(2, '0'),
+    ).join();
   }
 
   Future<void> send() async {
@@ -516,7 +592,7 @@ class AppController extends ChangeNotifier {
     var anyOk = false;
     if (batch.isEmpty) {
       try {
-        await api!.createMessage(text, cards.first.id);
+        await api!.createMessage(text, cards.first.id, deviceId: deviceId);
         pending = pending.where((card) => card.id != cards.first.id).toList();
         anyOk = true;
       } catch (error) {
@@ -527,12 +603,15 @@ class AppController extends ChangeNotifier {
         final file = batch[i];
         final card = cards[i];
         try {
-          final thumb = file.mime.startsWith('image/') ? await tools.webpThumb(Uint8List.fromList(file.bytes)) : null;
+          final thumb = file.mime.startsWith('image/')
+              ? await tools.webpThumb(Uint8List.fromList(file.bytes))
+              : null;
           final ticket = await api!.beginFile(
             fileName: file.name,
             text: i == 0 && meaningfulLength(text) > 0 ? text : null,
             declaredBytes: file.bytes.length,
             requestId: card.id,
+            deviceId: deviceId,
           );
           if (file.bytes.length > ticket.maxBytes) {
             card.error = l10n.tr('tooLarge');
@@ -573,7 +652,8 @@ class AppController extends ChangeNotifier {
       say(l10n.tr('offline'));
       return;
     }
-    if (item.status == 'locked' && (item.lockExpiresAt ?? 0) > DateTime.now().millisecondsSinceEpoch) {
+    if (item.status == 'locked' &&
+        (item.lockExpiresAt ?? 0) > DateTime.now().millisecondsSinceEpoch) {
       say(l10n.tr('locked'));
       return;
     }
@@ -584,16 +664,78 @@ class AppController extends ChangeNotifier {
       final claim = await api!.claim(item.itemId);
       if (item.kind == 'message') {
         final name = textDownloadName(DateTime.now().toUtc(), usedNames);
-        tools.saveFile(name, Uint8List.fromList(utf8.encode(claim.text ?? item.text ?? '')), 'text/plain;charset=utf-8');
+        tools.saveFile(
+          name,
+          Uint8List.fromList(utf8.encode(claim.text ?? item.text ?? '')),
+          'text/plain;charset=utf-8',
+        );
       } else if (claim.downloadUrl != null) {
         final bytes = await api!.download(claim.downloadUrl!);
-        final ext = (claim.fileName ?? item.fileName ?? '').split('.').last.toLowerCase();
-        final mime = {'html', 'htm', 'svg', 'apk'}.contains(ext) ? 'application/octet-stream' : (claim.mime ?? 'application/octet-stream');
+        final ext = (claim.fileName ?? item.fileName ?? '')
+            .split('.')
+            .last
+            .toLowerCase();
+        final mime = {'html', 'htm', 'svg', 'apk'}.contains(ext)
+            ? 'application/octet-stream'
+            : (claim.mime ?? 'application/octet-stream');
         tools.saveFile(claim.fileName ?? item.fileName ?? 'file', bytes, mime);
       }
       await api!.ack(item.itemId, claim.claimToken);
       await refresh();
       say(l10n.tr('receiveOk'));
+    } catch (error) {
+      say(explain(error));
+      try {
+        await refresh();
+      } catch (_) {}
+    } finally {
+      busy = false;
+      notifyListeners();
+    }
+  }
+
+  void _replaceItems(List<BoxItem> next) {
+    items = next;
+    final live = next.map((item) => item.itemId).toSet();
+    selectedIds.removeWhere((id) => !live.contains(id));
+  }
+
+  void toggleSelected(String itemId, bool on) {
+    if (on) {
+      selectedIds.add(itemId);
+    } else {
+      selectedIds.remove(itemId);
+    }
+    notifyListeners();
+  }
+
+  void selectAllItems() {
+    selectedIds
+      ..clear()
+      ..addAll(items.map((item) => item.itemId));
+    notifyListeners();
+  }
+
+  bool get hasSelection =>
+      items.any((item) => selectedIds.contains(item.itemId));
+
+  Future<void> deleteSelected() async {
+    final targets = items
+        .where((item) => selectedIds.contains(item.itemId))
+        .toList();
+    if (targets.isEmpty) return;
+    if (offline || api == null) {
+      say(l10n.tr('offline'));
+      return;
+    }
+    busy = true;
+    notifyListeners();
+    try {
+      for (final item in targets) {
+        await api!.deleteItem(item.itemId, confirm: true);
+      }
+      armedDelete = null;
+      await refresh();
     } catch (error) {
       say(explain(error));
       try {
@@ -635,7 +777,7 @@ class AppController extends ChangeNotifier {
     } catch (_) {}
     profile = null;
     box = null;
-    items = [];
+    _replaceItems([]);
     pending = [];
     files = [];
     withdrawArmed = false;
@@ -643,7 +785,11 @@ class AppController extends ChangeNotifier {
     go(Screen.welcome);
   }
 
-  Future<void> changePassword(String current, String next, String confirm) async {
+  Future<void> changePassword(
+    String current,
+    String next,
+    String confirm,
+  ) async {
     if (!validPassword(next)) {
       fieldError = l10n.tr('passwordCharset');
       notifyListeners();
@@ -674,7 +820,7 @@ class AppController extends ChangeNotifier {
       return;
     }
     try {
-      profile = await api!.setBackend(backend, cap);
+      profile = await api!.setBackend(backend, backend == 'google_cloud' ? null : cap, cloudMaxBytes: backend == 'google_cloud' || backend == 'firebase' ? cap : null);
       notifyListeners();
     } catch (error) {
       say(explain(error));
@@ -692,7 +838,7 @@ class AppController extends ChangeNotifier {
       await api!.deleteAccount();
       profile = null;
       box = null;
-      items = [];
+      _replaceItems([]);
       tools.write('tempbox.code', null);
       tools.write('tempbox.token', null);
       withdrawArmed = false;
@@ -730,9 +876,13 @@ class AppController extends ChangeNotifier {
 
   String csv() {
     final buffer = StringBuffer('\uFEFF');
-    buffer.writeln('${l10n.tr('colDate')},${l10n.tr('colEvent')},${l10n.tr('colGuest')},${l10n.tr('colSigned')},${l10n.tr('colTotal')}');
+    buffer.writeln(
+      '${l10n.tr('colDate')},${l10n.tr('colEvent')},${l10n.tr('colGuest')},${l10n.tr('colSigned')},${l10n.tr('colTotal')}',
+    );
     for (final row in statRows) {
-      buffer.writeln('${row.date},${_eventLabel(row.event)},${row.guest},${row.signed},${row.total}');
+      buffer.writeln(
+        '${row.date},${_eventLabel(row.event)},${row.guest},${row.signed},${row.total}',
+      );
     }
     return buffer.toString();
   }

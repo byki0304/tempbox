@@ -74,7 +74,9 @@ class MemoryView {
   }
 
   async expiredItems(now) {
-    return Object.values(this.data.items).filter((item) => item.expiresAt <= now);
+    return Object.values(this.data.items)
+      .filter((item) => item.expiresAt <= now)
+      .sort((a, b) => a.createdAt - b.createdAt || a.expiresAt - b.expiresAt);
   }
 
   async getUpload(id) { return this.data.uploads[id] || null; }

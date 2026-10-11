@@ -11,6 +11,7 @@ class Profile {
     this.email,
     this.phoneE164,
     this.driveMaxBytes,
+    this.cloudMaxBytes,
   });
 
   final String uid;
@@ -20,6 +21,7 @@ class Profile {
   final String? phoneE164;
   final String storageBackend;
   final int? driveMaxBytes;
+  final int? cloudMaxBytes;
   final bool disabled;
   final bool admin;
   final int createdAt;
@@ -37,6 +39,7 @@ class Profile {
       phoneE164: json['phoneE164'] as String?,
       storageBackend: json['storageBackend'] as String? ?? 'firebase',
       driveMaxBytes: (json['driveMaxBytes'] as num?)?.toInt(),
+      cloudMaxBytes: (json['cloudMaxBytes'] as num?)?.toInt(),
       disabled: json['disabled'] == true,
       admin: json['admin'] == true,
       createdAt: (json['createdAt'] as num?)?.toInt() ?? 0,
@@ -77,6 +80,8 @@ class BoxItem {
     this.backend,
     this.lockExpiresAt,
     this.thumbnailUrl,
+    this.originDeviceId,
+    this.authorUid,
   });
 
   final String itemId;
@@ -92,6 +97,8 @@ class BoxItem {
   final int createdAt;
   final int expiresAt;
   final String? thumbnailUrl;
+  final String? originDeviceId;
+  final String? authorUid;
 
   bool get hasText => text != null && text!.trim().isNotEmpty;
   bool get isFile => kind == 'file' || kind == 'message_file';
@@ -111,6 +118,8 @@ class BoxItem {
       createdAt: (json['createdAt'] as num).toInt(),
       expiresAt: (json['expiresAt'] as num).toInt(),
       thumbnailUrl: json['thumbnailUrl'] as String?,
+      originDeviceId: json['originDeviceId'] as String?,
+      authorUid: json['authorUid'] as String?,
     );
   }
 }

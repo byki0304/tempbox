@@ -143,18 +143,19 @@ class LocalApi implements BoxApi {
   }
 
   @override
-  Future<BoxItem> createMessage(String text, String requestId) async {
-    final json = await _call('createMessageItem', {'text': text, 'clientRequestId': requestId});
+  Future<BoxItem> createMessage(String text, String requestId, {String? deviceId}) async {
+    final json = await _call('createMessageItem', {'text': text, 'clientRequestId': requestId, 'originDeviceId': deviceId});
     return BoxItem.fromJson(Map<String, dynamic>.from(json['item'] as Map));
   }
 
   @override
-  Future<UploadTicket> beginFile({required String fileName, String? text, required int declaredBytes, required String requestId}) async {
+  Future<UploadTicket> beginFile({required String fileName, String? text, required int declaredBytes, required String requestId, String? deviceId}) async {
     final json = await _call('beginFileUpload', {
       'fileName': fileName,
       'text': text,
       'declaredBytes': declaredBytes,
       'clientRequestId': requestId,
+      'originDeviceId': deviceId,
     });
     if (json['already'] == true && json['item'] != null) {
       throw ApiException('already_done');
@@ -207,8 +208,8 @@ class LocalApi implements BoxApi {
   }
 
   @override
-  Future<Profile> setBackend(String backend, int? driveMaxBytes) async {
-    final json = await _call('setStorageBackend', {'storageBackend': backend, 'driveMaxBytes': driveMaxBytes});
+  Future<Profile> setBackend(String backend, int? driveMaxBytes, {int? cloudMaxBytes}) async {
+    final json = await _call('setStorageBackend', {'storageBackend': backend, 'driveMaxBytes': driveMaxBytes, 'cloudMaxBytes': cloudMaxBytes});
     return Profile.fromJson(Map<String, dynamic>.from(json['profile'] as Map));
   }
 

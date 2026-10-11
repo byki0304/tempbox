@@ -26,5 +26,7 @@ void main() {
     expect(validPassword('abc123'), isTrue);
     expect(validPassword('한글123'), isFalse);
     expect(validNickname('상자'), isTrue);
+    expect(displayPairingCode('ab12cd34'), 'AB12-CD34');
+    expect(displayPairingCode('ab12-cd34'), 'AB12-CD34');
   });
 }

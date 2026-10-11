@@ -17,6 +17,8 @@ const BLAZE_NO_COST_BYTES = 5 * GB;
 const DRIVE_PLATFORM_MAX_BYTES = 5 * TiB;
 const DRIVE_PRODUCT_MAX_BYTES = 2 * GiB;
 const DRIVE_CAP_OPTIONS = [128, 256, 512, 1024, 2048].map((mb) => mb * 1024 * 1024);
+const CLOUD_CAP_OPTIONS = [20, 100, 256, 512, 1024].map((mb) => mb * 1024 * 1024);
+const CLOUD_DEFAULT_BYTES = 20 * 1024 * 1024;
 
 const KEEP_MS = 240 * 60 * 60 * 1000;
 const LOCK_MS = 10 * 60 * 1000;
@@ -51,12 +53,17 @@ function limitsFor(plan, rawBudget) {
   };
 }
 
-function assessUpload({ plan, rawBudget, usedBytes, size, backend, driveCap }) {
+function assessUpload({ plan, rawBudget, usedBytes, size, backend, driveCap, cloudCap }) {
   const limits = limitsFor(plan, rawBudget);
   if (!Number.isFinite(size) || size <= 0) return 'empty_message';
   if (backend === 'google_drive') {
     const cap = DRIVE_CAP_OPTIONS.includes(driveCap) ? driveCap : DRIVE_PRODUCT_MAX_BYTES;
     if (size > Math.floor(DRIVE_PLATFORM_MAX_BYTES * 0.9)) return 'plan_capacity';
+    if (size > cap) return 'too_large';
+    return null;
+  }
+  if (backend === 'google_cloud') {
+    const cap = CLOUD_CAP_OPTIONS.includes(cloudCap) ? cloudCap : CLOUD_DEFAULT_BYTES;
     if (size > cap) return 'too_large';
     return null;
   }
@@ -74,6 +81,8 @@ module.exports = {
   DRIVE_PLATFORM_MAX_BYTES,
   DRIVE_PRODUCT_MAX_BYTES,
   DRIVE_CAP_OPTIONS,
+  CLOUD_CAP_OPTIONS,
+  CLOUD_DEFAULT_BYTES,
   KEEP_MS,
   LOCK_MS,
   ORPHAN_MS,

@@ -147,8 +147,16 @@ class BrowserWebTools implements WebTools {
     final anchor = web.document.createElement('a') as web.HTMLAnchorElement;
     anchor.href = url;
     anchor.download = filename;
+    anchor.style.display = 'none';
+    web.document.body?.appendChild(anchor);
     anchor.click();
-    web.URL.revokeObjectURL(url);
+    anchor.remove();
+    web.window.setTimeout(
+      (() {
+        web.URL.revokeObjectURL(url);
+      }).toJS,
+      4000.toJS,
+    );
   }
 
   @override

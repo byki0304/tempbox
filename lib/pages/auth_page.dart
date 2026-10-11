@@ -164,9 +164,8 @@ class _NicknamePageState extends State<NicknamePage> {
                 ),
                 const SizedBox(height: 16),
                 FilledButton(
-                  style: app.nicknameArmed ? FilledButton.styleFrom(backgroundColor: TempColors.confirm) : null,
-                  onPressed: () => app.saveNickname(controller.text),
-                  child: Text(app.nicknameArmed ? app.l10n.tr('saveConfirm') : app.l10n.tr('save')),
+                  onPressed: app.busy ? null : () => app.saveNickname(controller.text),
+                  child: Text(app.l10n.tr('save')),
                 ),
               ],
             ),
@@ -186,13 +185,11 @@ class GuestPage extends StatefulWidget {
 }
 
 class _GuestPageState extends State<GuestPage> {
-  final code = TextEditingController();
-  bool entering = false;
-
-  @override
-  void dispose() {
-    code.dispose();
-    super.dispose();
+  Future<void> _askCode() async {
+    await showDialog<void>(
+      context: context,
+      builder: (context) => _CodeEntryDialog(app: widget.app),
+    );
   }
 
   @override
@@ -211,23 +208,68 @@ class _GuestPageState extends State<GuestPage> {
                 const SizedBox(height: 8),
                 Text(app.l10n.tr('lostCode'), textAlign: TextAlign.center),
                 const SizedBox(height: 20),
-                FilledButton(onPressed: app.createFreshBox, child: Text(app.l10n.tr('newBox'))),
+                FilledButton(onPressed: app.busy ? null : app.createFreshBox, child: Text(app.l10n.tr('newBox'))),
                 const SizedBox(height: 12),
-                OutlinedButton(onPressed: () => setState(() => entering = true), child: Text(app.l10n.tr('enterCode'))),
-                if (entering) ...[
+                OutlinedButton(onPressed: app.busy ? null : _askCode, child: Text(app.l10n.tr('enterCode'))),
+                if (app.fieldError != null) ...[
                   const SizedBox(height: 12),
-                  TextField(
-                    controller: code,
-                    decoration: InputDecoration(labelText: app.l10n.tr('code'), hintText: app.l10n.tr('codeHint'), errorText: app.fieldError),
-                  ),
-                  const SizedBox(height: 12),
-                  FilledButton(onPressed: () => app.redeem(code.text), child: Text(app.l10n.tr('join'))),
+                  Text(app.fieldError!, textAlign: TextAlign.center, style: const TextStyle(color: TempColors.danger)),
                 ],
               ],
             ),
           ),
         ),
       ),
+    );
+  }
+}
+
+class _CodeEntryDialog extends StatefulWidget {
+  const _CodeEntryDialog({required this.app});
+  final AppController app;
+
+  @override
+  State<_CodeEntryDialog> createState() => _CodeEntryDialogState();
+}
+
+class _CodeEntryDialogState extends State<_CodeEntryDialog> {
+  final code = TextEditingController();
+
+  @override
+  void dispose() {
+    code.dispose();
+    super.dispose();
+  }
+
+  Future<void> _submit() async {
+    await widget.app.redeem(code.text);
+    if (!mounted) return;
+    if (widget.app.screen == Screen.box) {
+      Navigator.pop(context);
+      return;
+    }
+    setState(() {});
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final app = widget.app;
+    return AlertDialog(
+      title: Text(app.l10n.tr('enterCode')),
+      content: TextField(
+        controller: code,
+        autofocus: true,
+        decoration: InputDecoration(
+          labelText: app.l10n.tr('code'),
+          hintText: app.l10n.tr('codeHint'),
+          errorText: app.fieldError,
+        ),
+        onSubmitted: (_) => _submit(),
+      ),
+      actions: [
+        TextButton(onPressed: () => Navigator.pop(context), child: Text(app.l10n.tr('cancel'))),
+        FilledButton(onPressed: app.busy ? null : _submit, child: Text(app.l10n.tr('join'))),
+      ],
     );
   }
 }

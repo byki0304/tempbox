@@ -4,6 +4,8 @@ const crypto = require('crypto');
 const {
   DRIVE_CAP_OPTIONS,
   DRIVE_PRODUCT_MAX_BYTES,
+  CLOUD_CAP_OPTIONS,
+  CLOUD_DEFAULT_BYTES,
   KEEP_MS,
   LOCK_MS,
   ORPHAN_MS,
@@ -126,6 +128,8 @@ function publicItem(item, thumbnailUrl) {
     createdAt: item.createdAt,
     expiresAt: item.expiresAt,
     thumbnailUrl: thumbnailUrl || null,
+    originDeviceId: item.originDeviceId || null,
+    authorUid: item.ownerUid || null,
   };
 }
 
@@ -138,6 +142,7 @@ function publicProfile(user, admin) {
     phoneE164: user.phoneE164 || null,
     storageBackend: user.storageBackend,
     driveMaxBytes: user.driveMaxBytes || null,
+    cloudMaxBytes: user.cloudMaxBytes || CLOUD_DEFAULT_BYTES,
     disabled: user.disabled === true,
     admin: admin === true,
     createdAt: user.createdAt,
@@ -511,7 +516,7 @@ function createHandlers(store, options) {
     if (count >= cap) {
       return 'quota_user';
     }
-    const used = backend === 'google_drive' ? 0 : await tx.sumFirebaseBytes();
+    const used = backend === 'google_drive' || backend === 'google_cloud' ? 0 : await tx.sumFirebaseBytes();
     return assessUpload({
       plan,
       rawBudget,
@@ -519,6 +524,7 @@ function createHandlers(store, options) {
       size,
       backend,
       driveCap: user.driveMaxBytes || DRIVE_PRODUCT_MAX_BYTES,
+      cloudCap: user.cloudMaxBytes || CLOUD_DEFAULT_BYTES,
     });
   }
 
@@ -550,17 +556,24 @@ function createHandlers(store, options) {
       const cap = guestUser(user) ? GUEST_ITEM_CAP : SIGNED_ITEM_CAP;
       if (count >= cap) await reject(tx, user, requestId, 'quota_user');
       const createdAt = now();
+      const itemId = id();
+      const day = seoulDay(createdAt);
+      const stat = (await tx.getStat(day)) || emptyStat();
+      const counted = await tx.hasCounted(`created:${itemId}`);
+      const useCloud = user.storageBackend === 'google_cloud' && !guestUser(user);
+      const cloudCap = CLOUD_CAP_OPTIONS.includes(user.cloudMaxBytes) ? user.cloudMaxBytes : CLOUD_DEFAULT_BYTES;
+      if (useCloud && Buffer.byteLength(String(data.text), 'utf8') > cloudCap) await reject(tx, user, requestId, 'too_large');
       const item = {
-        itemId: id(),
+        itemId,
         boxId: box.boxId,
         ownerUid: ctx.uid,
         kind: 'message',
         text: data.text,
         fileName: null,
         mime: null,
-        bytes: null,
-        backend: null,
-        storagePath: null,
+        bytes: useCloud ? Buffer.byteLength(String(data.text), 'utf8') : null,
+        backend: useCloud ? 'google_cloud' : null,
+        storagePath: useCloud ? `cloud/${ctx.uid}/${itemId}.txt` : null,
         driveFileId: null,
         thumbnailPath: null,
         status: 'available',
@@ -568,13 +581,26 @@ function createHandlers(store, options) {
         claimTokenHash: null,
         createdAt,
         expiresAt: createdAt + KEEP_MS,
+        originDeviceId: cleanDeviceId(data.originDeviceId),
       };
       await tx.setItem(item);
-      await bump(tx, 'created', guestUser(user), item.itemId);
+      if (useCloud) await tx.putBlob(item.storagePath, Buffer.from(String(data.text), 'utf8'));
+      if (!counted) {
+        stat.created[guestUser(user) ? 'guest' : 'signed'] += 1;
+        await tx.setCounted(`created:${itemId}`);
+        await tx.setStat(day, stat);
+      }
       if (requestId) await tx.setRequest(requestId, { status: 'done', itemId: item.itemId });
       await audit(tx, ctx.uid, 'createMessageItem', ctx.uid, ['text']);
       return { item: publicItem(item, null) };
     });
+  }
+
+  function cleanDeviceId(value) {
+    if (!value) return null;
+    const text = String(value);
+    if (!/^[A-Za-z0-9]{16,64}$/.test(text)) return null;
+    return text;
   }
 
   function cleanRequestId(value) {
@@ -609,7 +635,9 @@ function createHandlers(store, options) {
       const room = (await tx.countItems(box.boxId)) + (await tx.uploadsForBox(box.boxId)).length;
       const cap = guestUser(user) ? GUEST_ITEM_CAP : SIGNED_ITEM_CAP;
       if (room >= cap) await reject(tx, user, requestId, 'quota_user');
-      let backend = user.storageBackend === 'google_drive' && user.provider === 'google' ? 'google_drive' : 'firebase';
+      let backend = 'firebase';
+      if (user.storageBackend === 'google_cloud' && !guestUser(user)) backend = 'google_cloud';
+      else if (user.storageBackend === 'google_drive' && user.provider === 'google') backend = 'google_drive';
       const declared = Number(data.declaredBytes);
       if (Number.isFinite(declared) && declared > 0) {
         const early = await assertCapacity(tx, user, box, declared, backend);
@@ -617,9 +645,12 @@ function createHandlers(store, options) {
       }
       const limits = limitsFor(plan, rawBudget);
       const driveCap = DRIVE_CAP_OPTIONS.includes(user.driveMaxBytes) ? user.driveMaxBytes : DRIVE_PRODUCT_MAX_BYTES;
+      const cloudCap = CLOUD_CAP_OPTIONS.includes(user.cloudMaxBytes) ? user.cloudMaxBytes : CLOUD_DEFAULT_BYTES;
       let maxBytes = backend === 'google_drive'
         ? Math.min(driveCap, Math.floor(limits.drivePlatformMax * 0.9))
-        : Math.min(limits.perFileMax, limits.planFileMax);
+        : backend === 'google_cloud'
+          ? cloudCap
+          : Math.min(limits.perFileMax, limits.planFileMax);
       if (backend === 'firebase' && maxBytes <= 0) await reject(tx, user, requestId, 'plan_capacity');
       const uploadId = id();
       const upload = {
@@ -638,6 +669,7 @@ function createHandlers(store, options) {
         completed: false,
         clientRequestId: requestId,
         fellBack: false,
+        originDeviceId: cleanDeviceId(data.originDeviceId),
       };
       if (backend === 'google_drive') {
         const opened = await tx.openDriveUpload?.({
@@ -657,6 +689,10 @@ function createHandlers(store, options) {
           upload.driveFileId = opened.driveFileId || id();
           upload.uploadUrl = opened.uploadUrl || `${origin}/upload/${uploadId}`;
         }
+      }
+      if (upload.backend === 'google_cloud') {
+        upload.storagePath = `cloud/${ctx.uid}/${uploadId}`;
+        upload.uploadUrl = `${origin}/upload/${uploadId}`;
       }
       if (upload.backend === 'firebase') {
         upload.storagePath = `uploads/${ctx.uid}/${uploadId}`;
@@ -734,8 +770,12 @@ function createHandlers(store, options) {
         await reject(tx, user, requestId, verdict);
       }
       const createdAt = now();
+      const itemId = id();
+      const day = seoulDay(createdAt);
+      const stat = (await tx.getStat(day)) || emptyStat();
+      const counted = await tx.hasCounted(`created:${itemId}`);
       const item = {
-        itemId: id(),
+        itemId,
         boxId: box.boxId,
         ownerUid: ctx.uid,
         kind: upload.text ? 'message_file' : 'file',
@@ -744,7 +784,7 @@ function createHandlers(store, options) {
         mime: upload.mime,
         bytes: size,
         backend: upload.backend,
-        storagePath: upload.backend === 'firebase' ? upload.storagePath : null,
+        storagePath: upload.backend === 'google_drive' ? null : upload.storagePath,
         driveFileId: upload.backend === 'google_drive' ? upload.driveFileId : null,
         thumbnailPath: upload.thumbnailPath || null,
         status: 'available',
@@ -752,12 +792,17 @@ function createHandlers(store, options) {
         claimTokenHash: null,
         createdAt,
         expiresAt: createdAt + KEEP_MS,
+        originDeviceId: upload.originDeviceId || null,
       };
       await tx.setItem(item);
       upload.completed = true;
       upload.itemId = item.itemId;
       await tx.setUpload(upload);
-      await bump(tx, 'created', guestUser(user), item.itemId);
+      if (!counted) {
+        stat.created[guestUser(user) ? 'guest' : 'signed'] += 1;
+        await tx.setCounted(`created:${itemId}`);
+        await tx.setStat(day, stat);
+      }
       if (requestId) await tx.setRequest(requestId, { status: 'done', itemId: item.itemId });
       await audit(tx, ctx.uid, 'completeFileUpload', ctx.uid, ['fileName', 'bytes', 'backend']);
       return { item: publicItem(item, await thumbUrl(tx, item)) };
@@ -830,19 +875,30 @@ function createHandlers(store, options) {
     return store.transact(async (tx) => {
       const user = await requireUser(tx, ctx);
       if (user.disabled) throw fail('forbidden');
-      if (user.provider !== 'google') throw fail('forbidden');
-      const backend = data.storageBackend === 'google_drive' ? 'google_drive' : 'firebase';
+      if (guestUser(user)) throw fail('forbidden');
+      const wantsCloud = data.storageBackend === 'google_cloud';
+      const wantsDrive = data.storageBackend === 'google_drive';
+      if (wantsDrive && user.provider !== 'google') throw fail('forbidden');
+      if (!wantsCloud && !wantsDrive && data.storageBackend !== 'firebase') throw fail('invalid');
+      const backend = wantsCloud ? 'google_cloud' : wantsDrive ? 'google_drive' : 'firebase';
       let driveMaxBytes = user.driveMaxBytes;
-      if (backend === 'google_drive') {
+      let cloudMaxBytes = CLOUD_CAP_OPTIONS.includes(user.cloudMaxBytes) ? user.cloudMaxBytes : CLOUD_DEFAULT_BYTES;
+      if (wantsDrive) {
         const picked = Number(data.driveMaxBytes);
         if (!DRIVE_CAP_OPTIONS.includes(picked)) throw fail('invalid');
         driveMaxBytes = picked;
+      }
+      if (data.cloudMaxBytes != null) {
+        const picked = Number(data.cloudMaxBytes);
+        if (!CLOUD_CAP_OPTIONS.includes(picked)) throw fail('invalid');
+        cloudMaxBytes = picked;
       }
       const admin = await tx.getClaim(ctx.uid);
       let priv = null;
       if (data.authCode && tx.exchangeDriveCode) priv = (await tx.getPrivate(ctx.uid)) || { uid: ctx.uid };
       user.storageBackend = backend;
       user.driveMaxBytes = backend === 'google_drive' ? driveMaxBytes : user.driveMaxBytes;
+      user.cloudMaxBytes = cloudMaxBytes;
       await tx.setUser(stripAdmin(user));
       if (priv && tx.exchangeDriveCode) {
         const token = await tx.exchangeDriveCode(data.authCode);
@@ -851,27 +907,47 @@ function createHandlers(store, options) {
           await tx.setPrivate(priv);
         }
       }
-      await audit(tx, ctx.uid, 'setStorageBackend', ctx.uid, ['storageBackend', 'driveMaxBytes']);
+      await audit(tx, ctx.uid, 'setStorageBackend', ctx.uid, ['storageBackend', 'driveMaxBytes', 'cloudMaxBytes']);
       return { profile: publicProfile(user, admin), driveOptions: DRIVE_CAP_OPTIONS.slice() };
     });
   }
 
   async function purgeExpired() {
     return store.transact(async (tx) => {
-      const items = await tx.expiredItems(now());
+      const nowMs = now();
+      const expired = (await tx.expiredItems(nowMs))
+        .filter((item) => item.status === 'available' || item.status === 'locked');
+      const everyone = tx.allItems ? await tx.allItems() : [];
+      const owners = new Map();
+      for (const item of expired) {
+        if (!owners.has(item.ownerUid)) owners.set(item.ownerUid, await tx.getUser(item.ownerUid));
+      }
+      const day = seoulDay(nowMs);
+      const stat = (await tx.getStat(day)) || emptyStat();
+      const pending = [];
+      for (const item of expired) {
+        pending.push({ item, counted: await tx.hasCounted(`expired:${item.itemId}`) });
+      }
+      for (const item of everyone) {
+        if (expired.some((row) => row.itemId === item.itemId)) continue;
+        if (item.status === 'locked' && item.lockExpiresAt && item.lockExpiresAt <= nowMs) {
+          item.status = 'available';
+          item.lockExpiresAt = null;
+          item.claimTokenHash = null;
+          await tx.setItem(item);
+        }
+      }
       let removed = 0;
-      for (const item of items) {
-        if (item.status !== 'available' && item.status !== 'locked') continue;
-        const owner = await tx.getUser(item.ownerUid);
-        await bump(tx, 'expired', !owner || owner.provider === 'anonymous', item.itemId);
-        await erase(tx, item);
+      for (const row of pending) {
+        if (row.counted) continue;
+        const owner = owners.get(row.item.ownerUid);
+        const guest = !owner || owner.provider === 'anonymous';
+        stat.expired[guest ? 'guest' : 'signed'] += 1;
+        await tx.setCounted(`expired:${row.item.itemId}`);
+        await erase(tx, row.item);
         removed += 1;
       }
-      const open = await tx.itemsForBox ? null : null;
-      void open;
-      if (tx.allItems) {
-        for (const item of await tx.allItems()) await releaseLock(tx, item);
-      }
+      if (removed > 0) await tx.setStat(day, stat);
       return { removed };
     });
   }

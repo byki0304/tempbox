@@ -33,6 +33,12 @@ String textDownloadName(DateTime utc, Set<String> used) {
   return name;
 }
 
+String displayPairingCode(String code) {
+  final raw = code.toUpperCase().replaceAll(RegExp(r'[^A-Z0-9]'), '');
+  if (raw.length < 8) return raw;
+  return '${raw.substring(0, 4)}-${raw.substring(4, 8)}';
+}
+
 String maskEmail(String email) {
   final at = email.indexOf('@');
   if (at <= 0) return email;
@@ -70,6 +76,29 @@ String seoulClock(int epochMs) {
   String p(int n) => n.toString().padLeft(2, '0');
   return '${seoul.year}-${p(seoul.month)}-${p(seoul.day)} ${p(seoul.hour)}:${p(seoul.minute)}';
 }
+
+String seoulHm(int epochMs) => seoulClock(epochMs).substring(11);
+
+String chatDayLabel(int epochMs, int nowMs, {required bool korean}) {
+  final seoul = DateTime.fromMillisecondsSinceEpoch(epochMs, isUtc: true).add(const Duration(hours: 9));
+  final today = DateTime.fromMillisecondsSinceEpoch(nowMs, isUtc: true).add(const Duration(hours: 9));
+  if (korean) {
+    if (seoul.year == today.year) return '${seoul.month}월 ${seoul.day}일';
+    return '${seoul.year}년 ${seoul.month}월 ${seoul.day}일';
+  }
+  if (seoul.year == today.year) return '${seoul.month}/${seoul.day}';
+  return '${seoul.year}-${seoul.month}-${seoul.day}';
+}
+
+String seoulDayKey(int epochMs) => seoulClock(epochMs).substring(0, 10);
+
+const cloudCaps = <int>[
+  20 * 1024 * 1024,
+  100 * 1024 * 1024,
+  256 * 1024 * 1024,
+  512 * 1024 * 1024,
+  1024 * 1024 * 1024,
+];
 
 const driveCaps = <int>[
   128 * 1024 * 1024,

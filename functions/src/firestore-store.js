@@ -1,6 +1,35 @@
 'use strict';
 
+const crypto = require('crypto');
 const { openResumable, deleteDriveFile } = require('./drive');
+
+let corsReady = false;
+
+async function ensureDownloadCors(bucket) {
+  if (corsReady) return;
+  await bucket.setCorsConfiguration([
+    {
+      origin: ['*'],
+      method: ['GET', 'HEAD', 'PUT', 'POST', 'DELETE'],
+      responseHeader: [
+        'Content-Type',
+        'Authorization',
+        'Content-Length',
+        'User-Agent',
+        'Cache-Control',
+        'Content-Disposition',
+        'x-goog-resumable',
+        'x-goog-upload-status',
+        'x-goog-upload-command',
+        'x-goog-upload-header-content-length',
+        'x-goog-upload-header-content-type',
+        'x-firebase-storage-version',
+      ],
+      maxAgeSeconds: 3600,
+    },
+  ]);
+  corsReady = true;
+}
 
 class FirestoreView {
   constructor(adminApp, tx) {
@@ -79,7 +108,9 @@ class FirestoreView {
 
   async expiredItems(now) {
     const snap = await this.tx.get(this.col('items').where('expiresAt', '<=', now));
-    return snap.docs.map((doc) => doc.data());
+    return snap.docs
+      .map((doc) => doc.data())
+      .sort((a, b) => a.createdAt - b.createdAt || a.expiresAt - b.expiresAt);
   }
 
   async getUpload(id) { return this._one('uploads', id); }
@@ -166,13 +197,40 @@ class FirestoreView {
   async getTicket() { return null; }
   async deleteTicketsForItem() {}
 
-  async signedReadUrl(filePath, item) {
-    const [url] = await this.bucket.file(filePath).getSignedUrl({
-      action: 'read',
-      expires: Date.now() + 10 * 60 * 1000,
-      responseDisposition: `attachment; filename="${item.fileName || 'file'}"`,
-    });
-    return url;
+  async signedReadUrl(filePath) {
+    const file = this.bucket.file(filePath);
+    try {
+      await ensureDownloadCors(this.bucket);
+    } catch (error) {
+      console.log(JSON.stringify({ cors: String(error.message || '').slice(0, 160) }));
+    }
+    const token = crypto.randomBytes(32).toString('hex');
+    let meta;
+    try {
+      [meta] = await file.getMetadata();
+    } catch (error) {
+      if (error && (error.code === 404 || error.code === '404')) {
+        const missing = new Error('expired');
+        missing.code = 'expired';
+        throw missing;
+      }
+      throw error;
+    }
+    const custom = { ...(meta.metadata || {}) };
+    const prev = String(custom.firebaseStorageDownloadTokens || '').split(',').filter(Boolean);
+    prev.push(token);
+    custom.firebaseStorageDownloadTokens = prev.slice(-8).join(',');
+    try {
+      await file.setMetadata({ metadata: custom });
+    } catch (_) {
+      const [url] = await file.getSignedUrl({
+        action: 'read',
+        expires: Date.now() + 10 * 60 * 1000,
+      });
+      return url;
+    }
+    const encoded = encodeURIComponent(filePath);
+    return `https://firebasestorage.googleapis.com/v0/b/${this.bucket.name}/o/${encoded}?alt=media&token=${token}`;
   }
 
   async openDriveUpload(info) {

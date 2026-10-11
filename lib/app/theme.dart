@@ -9,6 +9,11 @@ class TempColors {
   static const accent = Color(0xFFC2410C);
   static const danger = Color(0xFF9F1239);
   static const confirm = Color(0xFF0F766E);
+  static const chatCanvas = Color(0xFF8EAAE6);
+  static const bubbleOut = Color(0xFFF6FFEF);
+  static const bubbleMine = Color(0xFFF6FFEF);
+  static const bubbleOther = Color(0xFFFFFFFF);
+  static const chatMeta = Color(0xFF6C7A89);
 }
 
 class TempTheme {

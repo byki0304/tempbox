@@ -22,7 +22,6 @@ class _MyPageState extends State<MyPage> {
   final next = TextEditingController();
   final confirm = TextEditingController();
   bool hide = true;
-  bool nickArmed = false;
 
   @override
   void initState() {
@@ -57,16 +56,8 @@ class _MyPageState extends State<MyPage> {
         TextField(controller: nickname, decoration: InputDecoration(labelText: app.l10n.tr('nickname'), errorText: app.fieldError)),
         const SizedBox(height: 8),
         FilledButton(
-          style: nickArmed ? FilledButton.styleFrom(backgroundColor: TempColors.confirm) : null,
-          onPressed: () async {
-            if (!nickArmed) {
-              setState(() => nickArmed = true);
-              return;
-            }
-            await app.saveNickname(nickname.text, confirmed: true, stay: true);
-            setState(() => nickArmed = false);
-          },
-          child: Text(nickArmed ? app.l10n.tr('saveConfirm') : app.l10n.tr('save')),
+          onPressed: app.busy ? null : () => app.saveNickname(nickname.text, stay: true),
+          child: Text(app.l10n.tr('save')),
         ),
         const SizedBox(height: 16),
         Text(masked, style: const TextStyle(fontSize: 16)),

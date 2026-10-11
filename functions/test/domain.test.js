@@ -217,3 +217,30 @@ test('purge removes expired items without keeping the body in stats', async () =
   assert.equal(stats.expired.guest, 1);
   assert.equal(JSON.stringify(stats).includes('오래됨'), false);
 });
+
+test('signed-in google cloud keeps a message until download deletes it', async () => {
+  const app = world();
+  const signed = await app.auth.signup({ kind: 'email', email: 'cloud@example.com', password: 'abc123' });
+  await app.handlers.setNickname(signed.ctx, { nickname: '클라우드', confirm: true });
+  await app.handlers.createBox(signed.ctx, {});
+  const guest = await app.auth.guest();
+  await app.handlers.setNickname(guest.ctx, { nickname: '손님둘', confirm: true });
+  await assert.rejects(
+    app.handlers.setStorageBackend(guest.ctx, { storageBackend: 'google_cloud', cloudMaxBytes: 20 * 1024 * 1024 }),
+    (error) => error.code === 'forbidden',
+  );
+  const saved = await app.handlers.setStorageBackend(signed.ctx, { storageBackend: 'google_cloud', cloudMaxBytes: 20 * 1024 * 1024 });
+  assert.equal(saved.profile.storageBackend, 'google_cloud');
+  assert.equal(saved.profile.cloudMaxBytes, 20 * 1024 * 1024);
+  const created = await app.handlers.createMessageItem(signed.ctx, { text: '클라우드메모', clientRequestId: 'req-cloud-0001' });
+  const stored = await app.store.transact(async (tx) => tx.getItem(created.item.itemId));
+  assert.equal(stored.backend, 'google_cloud');
+  assert.equal(await app.store.transact(async (tx) => tx.blobSize(stored.storagePath)), Buffer.byteLength('클라우드메모'));
+  const begun = await app.handlers.beginFileUpload(signed.ctx, { fileName: 'note.txt', clientRequestId: 'req-cloud-file' });
+  assert.equal(begun.backend, 'google_cloud');
+  assert.equal(begun.maxBytes, 20 * 1024 * 1024);
+  const claim = await app.handlers.claimItem(signed.ctx, { itemId: created.item.itemId });
+  await app.handlers.ackItem(signed.ctx, { itemId: created.item.itemId, claimToken: claim.claimToken });
+  assert.equal(await app.store.transact(async (tx) => tx.getItem(created.item.itemId)), null);
+  assert.equal(await app.store.transact(async (tx) => tx.blobSize(stored.storagePath)), 0);
+});
