@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <base href="$FLUTTER_BASE_HREF">
+  <meta charset="UTF-8">
+  <meta content="IE=Edge" http-equiv="X-UA-Compatible">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="넣으면 다른 기기에서 한 번 받을 수 있습니다. 받은 뒤에는 상자에서 사라집니다.">
+  <meta name="theme-color" content="#1E3A5F">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black">
+  <meta name="apple-mobile-web-app-title" content="템프박스">
+  <title>템프박스</title>
+  <link rel="manifest" href="manifest.json">
+  <link rel="icon" type="image/png" href="brand/icons/desktop/favicon-32.png">
+  <link rel="apple-touch-icon" href="brand/icons/mobile/apple-touch-180.png">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;600;700&display=swap" rel="stylesheet">
+  <style>
+    html, body { margin: 0; background: #F6F1E8; color: #1C1917; font-family: "Noto Sans KR", sans-serif; }
+  </style>
+  <script>
+    (function () {
+      var sensitive = /firebasestorage|storage\.googleapis|drive\.google|googleusercontent|\/storage\/|\/thumb\/|\/upload\/|X-Goog-|Signature=|token=/i;
+      var original = window.fetch;
+      window.fetch = function (input, init) {
+        var url = typeof input === 'string' ? input : (input && input.url) || '';
+        if (sensitive.test(url)) {
+          init = Object.assign({}, init || {}, { cache: 'no-store' });
+        }
+        return original.call(this, input, init);
+      };
+    })();
+  </script>
+</head>
+<body>
+  <script src="flutter_bootstrap.js" async></script>
+</body>
+</html>
