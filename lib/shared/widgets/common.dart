@@ -108,6 +108,16 @@ class PairingCodeLabel extends StatelessWidget {
   }
 }
 
+enum AppFrame { desk, portrait, landscape }
+
+AppFrame appFrameOf(BuildContext context) {
+  final size = MediaQuery.sizeOf(context);
+  final landscape = size.width > size.height;
+  if (landscape && size.height < 520) return AppFrame.landscape;
+  if (!landscape && size.width < 840) return AppFrame.portrait;
+  return AppFrame.desk;
+}
+
 class AppShell extends StatelessWidget {
   const AppShell({super.key, required this.app, required this.child});
   final AppController app;
@@ -115,155 +125,175 @@ class AppShell extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final wide = MediaQuery.sizeOf(context).width >= 768;
-    final body = Column(
+    final frame = appFrameOf(context);
+    return switch (frame) {
+      AppFrame.desk => _desk(context),
+      AppFrame.portrait => _portrait(context),
+      AppFrame.landscape => _landscape(context),
+    };
+  }
+
+  Widget _stage({required bool limitWidth}) {
+    return Expanded(
+      child: Align(
+        alignment: Alignment.topCenter,
+        child: limitWidth
+            ? ConstrainedBox(constraints: const BoxConstraints(maxWidth: 720), child: child)
+            : child,
+      ),
+    );
+  }
+
+  Widget _titleRow({required bool showMyPage}) {
+    return Row(
       children: [
-        Padding(
-          padding: const EdgeInsets.fromLTRB(16, 12, 12, 0),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              if (!wide && (app.pairingCode ?? '').isNotEmpty) ...[
-                PairingCodeLabel(
-                  code: app.pairingCode,
-                  label: app.l10n.tr('codeNumber'),
-                ),
-                const SizedBox(height: 8),
-              ],
-              Row(
-                children: [
-                  Text(
-                    app.l10n.tr('app'),
-                    style: const TextStyle(
-                      fontSize: 20,
-                      fontWeight: FontWeight.w700,
-                      color: TempColors.seal,
-                    ),
-                  ),
-                  const Spacer(),
-                  TextButton(
-                    onPressed: () => app.logout(),
-                    child: Text(app.l10n.tr('logout')),
-                  ),
-                  const SizedBox(width: 4),
-                  FilledButton(
-                    onPressed: () => app.go(Screen.me),
-                    child: Text(app.l10n.tr('my')),
-                  ),
-                ],
-              ),
-            ],
-          ),
-        ),
         Expanded(
-          child: Align(
-            alignment: Alignment.topCenter,
-            child: ConstrainedBox(
-              constraints: const BoxConstraints(maxWidth: 720),
-              child: child,
-            ),
+          child: Text(
+            app.l10n.tr('app'),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w700, color: TempColors.seal),
           ),
         ),
+        TextButton(onPressed: () => app.logout(), child: Text(app.l10n.tr('logout'))),
+        if (showMyPage) ...[
+          const SizedBox(width: 4),
+          FilledButton(onPressed: () => app.go(Screen.me), child: Text(app.l10n.tr('my'))),
+        ],
       ],
     );
-    if (wide) {
-      return Scaffold(
-        body: Row(
+  }
+
+  Widget _desk(BuildContext context) {
+    final wideHeader = MediaQuery.sizeOf(context).width >= 768;
+    return Scaffold(
+      body: Row(
+        children: [
+          NavigationRail(
+            minWidth: 280,
+            backgroundColor: TempColors.surface,
+            leading: SizedBox(
+              width: 248,
+              child: Align(
+                alignment: Alignment.centerLeft,
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 16, 12, 8),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      PairingCodeLabel(code: app.pairingCode, label: app.l10n.tr('codeNumber')),
+                      if (app.profile != null && !app.profile!.isGuest) ...[
+                        const SizedBox(height: 12),
+                        CloudShelf(app: app),
+                      ],
+                    ],
+                  ),
+                ),
+              ),
+            ),
+            selectedIndex: _index(app.screen),
+            onDestinationSelected: (index) => app.go([Screen.box, Screen.help, Screen.me][index]),
+            labelType: NavigationRailLabelType.all,
+            destinations: [
+              NavigationRailDestination(icon: const Icon(Icons.inventory_2_outlined), label: Text(app.l10n.tr('box'))),
+              NavigationRailDestination(icon: const Icon(Icons.menu_book_outlined), label: Text(app.l10n.tr('help'))),
+              NavigationRailDestination(icon: const Icon(Icons.person_outline), label: Text(app.l10n.tr('my'))),
+            ],
+          ),
+          const VerticalDivider(width: 1),
+          Expanded(
+            child: Column(
+              children: [
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 12, 12, 0),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      if (!wideHeader && (app.pairingCode ?? '').isNotEmpty) ...[
+                        PairingCodeLabel(code: app.pairingCode, label: app.l10n.tr('codeNumber')),
+                        const SizedBox(height: 8),
+                      ],
+                      _titleRow(showMyPage: true),
+                    ],
+                  ),
+                ),
+                _stage(limitWidth: true),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _portrait(BuildContext context) {
+    final signedIn = app.profile != null && !app.profile!.isGuest;
+    return Scaffold(
+      body: SafeArea(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            NavigationRail(
-              minWidth: 280,
-              backgroundColor: TempColors.surface,
-              leading: SizedBox(
-                width: 248,
-                child: Align(
-                  alignment: Alignment.centerLeft,
-                  child: Padding(
-                    padding: const EdgeInsets.fromLTRB(16, 16, 12, 8),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 8, 8, 0),
+              child: _titleRow(showMyPage: false),
+            ),
+            if ((app.pairingCode ?? '').isNotEmpty)
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16, 4, 16, 0),
+                child: PairingCodeLabel(code: app.pairingCode, label: app.l10n.tr('codeNumber')),
+              ),
+            if (signedIn)
+              Padding(
+                padding: const EdgeInsets.fromLTRB(8, 0, 12, 0),
+                child: CloudShelf(app: app, inline: true),
+              ),
+            _stage(limitWidth: false),
+          ],
+        ),
+      ),
+      bottomNavigationBar: NavigationBar(
+        height: 64,
+        selectedIndex: _index(app.screen),
+        onDestinationSelected: (index) => app.go([Screen.box, Screen.help, Screen.me][index]),
+        destinations: [
+          NavigationDestination(icon: const Icon(Icons.inventory_2_outlined), label: app.l10n.tr('box')),
+          NavigationDestination(icon: const Icon(Icons.menu_book_outlined), label: app.l10n.tr('help')),
+          NavigationDestination(icon: const Icon(Icons.person_outline), label: app.l10n.tr('my')),
+        ],
+      ),
+    );
+  }
+
+  Widget _landscape(BuildContext context) {
+    final signedIn = app.profile != null && !app.profile!.isGuest;
+    return Scaffold(
+      body: SafeArea(
+        child: Row(
+          children: [
+            _PhoneRail(app: app, index: _index(app.screen)),
+            const VerticalDivider(width: 1),
+            Expanded(
+              child: Column(
+                children: [
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(12, 4, 8, 0),
                     child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      crossAxisAlignment: CrossAxisAlignment.start,
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
                       children: [
-                        PairingCodeLabel(
-                          code: app.pairingCode,
-                          label: app.l10n.tr('codeNumber'),
-                        ),
-                        if (app.profile != null && !app.profile!.isGuest) ...[
-                          const SizedBox(height: 12),
-                          CloudShelf(app: app),
-                        ],
+                        _titleRow(showMyPage: false),
+                        if ((app.pairingCode ?? '').isNotEmpty)
+                          PairingCodeLabel(code: app.pairingCode, label: app.l10n.tr('codeNumber')),
+                        if (signedIn) CloudShelf(app: app, inline: true),
                       ],
                     ),
                   ),
-                ),
+                  _stage(limitWidth: false),
+                ],
               ),
-              selectedIndex: _index(app.screen),
-              onDestinationSelected: (index) =>
-                  app.go([Screen.box, Screen.help, Screen.me][index]),
-              labelType: NavigationRailLabelType.all,
-              destinations: [
-                NavigationRailDestination(
-                  icon: const Icon(Icons.inventory_2_outlined),
-                  label: Text(app.l10n.tr('box')),
-                ),
-                NavigationRailDestination(
-                  icon: const Icon(Icons.menu_book_outlined),
-                  label: Text(app.l10n.tr('help')),
-                ),
-                NavigationRailDestination(
-                  icon: const Icon(Icons.person_outline),
-                  label: Text(app.l10n.tr('my')),
-                ),
-              ],
             ),
-            const VerticalDivider(width: 1),
-            Expanded(child: body),
           ],
         ),
-      );
-    }
-    final account = app.profile != null && !app.profile!.isGuest;
-    return Scaffold(
-      body: account
-          ? Row(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                ColoredBox(
-                  color: TempColors.surface,
-                  child: SizedBox(
-                    width: 188,
-                    child: Align(
-                      alignment: Alignment.topLeft,
-                      child: Padding(
-                        padding: const EdgeInsets.fromLTRB(12, 16, 8, 12),
-                        child: CloudShelf(app: app),
-                      ),
-                    ),
-                  ),
-                ),
-                const VerticalDivider(width: 1),
-                Expanded(child: body),
-              ],
-            )
-          : body,
-      bottomNavigationBar: NavigationBar(
-        height: 72,
-        selectedIndex: _index(app.screen),
-        onDestinationSelected: (index) =>
-            app.go([Screen.box, Screen.help, Screen.me][index]),
-        destinations: [
-          NavigationDestination(
-            icon: const Icon(Icons.inventory_2_outlined),
-            label: app.l10n.tr('box'),
-          ),
-          NavigationDestination(
-            icon: const Icon(Icons.menu_book_outlined),
-            label: app.l10n.tr('help'),
-          ),
-          NavigationDestination(
-            icon: const Icon(Icons.person_outline),
-            label: app.l10n.tr('my'),
-          ),
-        ],
       ),
     );
   }
@@ -299,9 +329,70 @@ class SelectionActionButton extends StatelessWidget {
   }
 }
 
-class CloudShelf extends StatelessWidget {
-  const CloudShelf({super.key, required this.app});
+class _PhoneRail extends StatelessWidget {
+  const _PhoneRail({required this.app, required this.index});
   final AppController app;
+  final int index;
+
+  @override
+  Widget build(BuildContext context) {
+    const icons = [Icons.inventory_2_outlined, Icons.menu_book_outlined, Icons.person_outline];
+    final labels = [app.l10n.tr('box'), app.l10n.tr('help'), app.l10n.tr('my')];
+    return ColoredBox(
+      color: TempColors.surface,
+      child: SizedBox(
+        width: 84,
+        child: Column(
+          children: [
+            const SizedBox(height: 8),
+            for (var i = 0; i < icons.length; i++)
+              Padding(
+                padding: const EdgeInsets.symmetric(vertical: 4),
+                child: InkWell(
+                  borderRadius: BorderRadius.circular(12),
+                  onTap: () => app.go([Screen.box, Screen.help, Screen.me][i]),
+                  child: SizedBox(
+                    width: 72,
+                    child: Column(
+                      children: [
+                        DecoratedBox(
+                          decoration: BoxDecoration(
+                            color: i == index ? TempColors.seal : Colors.transparent,
+                            borderRadius: BorderRadius.circular(14),
+                          ),
+                          child: SizedBox(
+                            width: 44,
+                            height: 32,
+                            child: Icon(icons[i], size: 22, color: i == index ? Colors.white : TempColors.seal),
+                          ),
+                        ),
+                        const SizedBox(height: 2),
+                        Text(
+                          labels[i],
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            fontSize: 11,
+                            fontWeight: i == index ? FontWeight.w700 : FontWeight.w500,
+                            color: TempColors.seal,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class CloudShelf extends StatelessWidget {
+  const CloudShelf({super.key, required this.app, this.inline = false});
+  final AppController app;
+  final bool inline;
 
   @override
   Widget build(BuildContext context) {
@@ -309,33 +400,58 @@ class CloudShelf extends StatelessWidget {
     if (profile == null || profile.isGuest) return const SizedBox.shrink();
     final enabled = profile.storageBackend == 'google_cloud';
     final cap = cloudCaps.contains(profile.cloudMaxBytes) ? profile.cloudMaxBytes! : cloudCaps.first;
+    final box = DropdownButton<int>(
+      isExpanded: !inline,
+      value: cap,
+      items: [
+        for (final option in cloudCaps) DropdownMenuItem(value: option, child: Text(driveCapLabel(option))),
+      ],
+      onChanged: app.offline
+          ? null
+          : (value) {
+              if (value == null) return;
+              app.setShelf(enabled ? 'google_cloud' : 'firebase', value);
+            },
+    );
+    final check = CheckboxListTile(
+      contentPadding: EdgeInsets.zero,
+      dense: true,
+      visualDensity: VisualDensity.compact,
+      value: enabled,
+      controlAffinity: ListTileControlAffinity.leading,
+      title: Text(
+        app.l10n.tr('googleCloud'),
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
+        style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w700),
+      ),
+      onChanged: app.offline ? null : (value) => app.setShelf(value == true ? 'google_cloud' : 'firebase', cap),
+    );
+    if (inline) {
+      return LayoutBuilder(
+        builder: (context, constraints) {
+          final wide = constraints.maxWidth > 520;
+          final labelWidth = wide ? 210.0 : (constraints.maxWidth - 128).clamp(140.0, 260.0);
+          return Align(
+            alignment: Alignment.centerLeft,
+            child: Row(
+              children: [
+                SizedBox(width: labelWidth, child: check),
+                const SizedBox(width: 8),
+                SizedBox(width: 112, child: box),
+              ],
+            ),
+          );
+        },
+      );
+    }
     return Column(
       mainAxisSize: MainAxisSize.min,
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        CheckboxListTile(
-          contentPadding: EdgeInsets.zero,
-          dense: true,
-          value: enabled,
-          controlAffinity: ListTileControlAffinity.leading,
-          title: Text(app.l10n.tr('googleCloud'), style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w700)),
-          onChanged: app.offline ? null : (value) => app.setShelf(value == true ? 'google_cloud' : 'firebase', cap),
-        ),
+        check,
         Text(app.l10n.tr('cloudCap'), style: const TextStyle(fontSize: 13, color: TempColors.chatMeta)),
-        DropdownButton<int>(
-          isExpanded: true,
-          value: cap,
-          items: [
-            for (final option in cloudCaps)
-              DropdownMenuItem(value: option, child: Text(driveCapLabel(option))),
-          ],
-          onChanged: app.offline
-              ? null
-              : (value) {
-                  if (value == null) return;
-                  app.setShelf(enabled ? 'google_cloud' : 'firebase', value);
-                },
-        ),
+        box,
       ],
     );
   }
@@ -359,7 +475,11 @@ class ItemCard extends StatelessWidget {
     );
     final selected = app.selectedIds.contains(item.itemId);
     final fromHere = app.sentFromHere(item);
-    return Padding(
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final tight = constraints.maxWidth < 460;
+        final side = tight ? 8.0 : 28.0;
+        return Padding(
       padding: const EdgeInsets.only(bottom: 6),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -383,9 +503,9 @@ class ItemCard extends StatelessWidget {
             child: Align(
               alignment: fromHere ? Alignment.centerLeft : Alignment.centerRight,
               child: ConstrainedBox(
-                constraints: const BoxConstraints(maxWidth: 320),
+                constraints: BoxConstraints(maxWidth: tight ? constraints.maxWidth - 72 : 320),
                 child: Container(
-                  margin: EdgeInsets.only(left: fromHere ? 6 : 28, right: fromHere ? 28 : 6),
+                  margin: EdgeInsets.only(left: fromHere ? 4 : side, right: fromHere ? side : 4),
                   padding: const EdgeInsets.fromLTRB(10, 7, 8, 4),
                   decoration: BoxDecoration(
                     color: fromHere ? TempColors.bubbleMine : TempColors.bubbleOther,
@@ -518,6 +638,8 @@ class ItemCard extends StatelessWidget {
           ),
         ],
       ),
+    );
+      },
     );
   }
 }

@@ -18,6 +18,10 @@ class TempBoxApp extends StatefulWidget {
 class _TempBoxAppState extends State<TempBoxApp> {
   final app = AppController();
   final keys = FocusNode();
+  final homeKey = GlobalKey();
+  final helpKey = GlobalKey();
+  final meKey = GlobalKey();
+  final adminKey = GlobalKey();
 
   @override
   void initState() {
@@ -73,13 +77,13 @@ class _TempBoxAppState extends State<TempBoxApp> {
         return GuestPage(app: app);
       case Screen.help:
         if (app.profile == null) return HelpPage(app: app);
-        return AppShell(app: app, child: HelpPage(app: app, inShell: true));
+        return AppShell(app: app, child: HelpPage(key: helpKey, app: app, inShell: true));
       case Screen.me:
-        return AppShell(app: app, child: MyPage(app: app));
+        return AppShell(app: app, child: MyPage(key: meKey, app: app));
       case Screen.admin:
-        return AppShell(app: app, child: AdminPage(app: app));
+        return AppShell(app: app, child: AdminPage(key: adminKey, app: app));
       case Screen.box:
-        return AppShell(app: app, child: HomePage(app: app));
+        return AppShell(app: app, child: HomePage(key: homeKey, app: app));
     }
   }
 }

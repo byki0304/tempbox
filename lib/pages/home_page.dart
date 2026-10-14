@@ -58,30 +58,41 @@ class _HomePageState extends State<HomePage> {
   @override
   Widget build(BuildContext context) {
     final app = widget.app;
+    final frame = appFrameOf(context);
+    final portrait = frame == AppFrame.portrait;
+    final hint = app.profile?.isGuest == true ? app.l10n.tr('guestHint') : app.l10n.tr('accountHint');
+    final hintText = Text(hint, textAlign: portrait ? TextAlign.start : TextAlign.center, softWrap: true);
     return Stack(
       children: [
         Padding(
-          padding: const EdgeInsets.fromLTRB(16, 8, 16, 12),
+          padding: EdgeInsets.fromLTRB(portrait ? 12 : 10, frame == AppFrame.landscape ? 2 : 8, portrait ? 12 : 10, frame == AppFrame.landscape ? 6 : 12),
           child: Column(
             children: [
               LiveNote(message: app.live),
               if (app.offline) Text(app.l10n.tr('offline')),
               if (app.profile?.disabled == true) Text(app.l10n.tr('disabled')),
-              Row(
-                crossAxisAlignment: CrossAxisAlignment.center,
-                children: [
-                  if (app.items.isNotEmpty) ...[
-                    SelectionActionButton(app: app),
-                    const SizedBox(width: 12),
+              if (portrait)
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    if (app.items.isNotEmpty) ...[
+                      Align(alignment: Alignment.centerLeft, child: SelectionActionButton(app: app)),
+                      const SizedBox(height: 6),
+                    ],
+                    hintText,
                   ],
-                  Expanded(
-                    child: Text(
-                      app.profile?.isGuest == true ? app.l10n.tr('guestHint') : app.l10n.tr('accountHint'),
-                      textAlign: TextAlign.center,
-                    ),
-                  ),
-                ],
-              ),
+                )
+              else
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.center,
+                  children: [
+                    if (app.items.isNotEmpty) ...[
+                      SelectionActionButton(app: app),
+                      const SizedBox(width: 12),
+                    ],
+                    Expanded(child: hintText),
+                  ],
+                ),
               const SizedBox(height: 8),
               Expanded(
                 child: DecoratedBox(
@@ -123,10 +134,12 @@ class _HomePageState extends State<HomePage> {
   Widget _thread(AppController app) {
     final items = [...app.items]..sort((a, b) => a.createdAt.compareTo(b.createdAt));
     if (items.isEmpty && app.pending.isEmpty) {
+      final frame = appFrameOf(context);
+      final art = frame == AppFrame.landscape ? 72.0 : frame == AppFrame.portrait ? 120.0 : 180.0;
       return ListView(
-        padding: const EdgeInsets.all(24),
+        padding: EdgeInsets.all(frame == AppFrame.landscape ? 12 : 24),
         children: [
-          const BrandImage(path: '/brand/states/empty/empty.png', height: 180),
+          BrandImage(path: '/brand/states/empty/empty.png', height: art),
           const SizedBox(height: 12),
           Text(app.l10n.tr('empty'), textAlign: TextAlign.center, style: const TextStyle(color: Colors.white)),
         ],
@@ -223,7 +236,7 @@ class _HomePageState extends State<HomePage> {
                 child: TextField(
                   controller: input,
                   minLines: 1,
-                  maxLines: 6,
+                  maxLines: appFrameOf(context) == AppFrame.landscape ? 3 : 6,
                   style: const TextStyle(fontSize: 16),
                   decoration: InputDecoration(
                     filled: true,
