@@ -135,13 +135,7 @@ class _MyPageState extends State<MyPage> {
           OutlinedButton(onPressed: () => app.go(Screen.admin), child: Text(app.l10n.tr('stats'))),
         ],
         const SizedBox(height: 12),
-        Wrap(
-          spacing: 8,
-          children: [
-            TextButton(onPressed: () => app.setLocale('ko'), child: Text(app.l10n.tr('korean'))),
-            TextButton(onPressed: () => app.setLocale('en'), child: Text(app.l10n.tr('english'))),
-          ],
-        ),
+        LanguageChoices(app: app),
       ],
     );
   }

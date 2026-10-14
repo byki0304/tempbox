@@ -43,7 +43,7 @@ class _TempBoxAppState extends State<TempBoxApp> {
   Widget build(BuildContext context) {
     final page = _page();
     return MaterialApp(
-      title: app.l10n.tr('app'),
+      title: 'TempBox',
       debugShowCheckedModeBanner: false,
       theme: TempTheme.light(),
       locale: Locale(app.locale),

@@ -31,6 +31,7 @@ class TempTheme {
         onSurface: TempColors.ink,
       ),
       fontFamily: 'Noto Sans KR',
+      fontFamilyFallback: const ['Noto Sans JP'],
     );
     return base.copyWith(
       textTheme: base.textTheme.apply(

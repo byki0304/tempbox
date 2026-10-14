@@ -6,6 +6,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:tempbox/app/theme.dart';
 import 'package:tempbox/entities/models.dart';
 import 'package:tempbox/features/app_controller.dart';
+import 'package:tempbox/pages/auth_page.dart';
 import 'package:tempbox/pages/home_page.dart';
 import 'package:tempbox/shared/web/web_tools_api.dart';
 import 'package:tempbox/shared/widgets/common.dart';
@@ -20,7 +21,9 @@ void main() {
     expect(find.byType(NavigationRail), findsNothing);
     expect(_hintWidth(tester), greaterThan(280));
     expect(find.text('Google Cloud'), findsOneWidget);
+    expect(find.text('파일 하나 상한'), findsOneWidget);
     expect(find.text('100MB'), findsOneWidget);
+    expect(find.text('TempBox'), findsWidgets);
 
     await _pump(tester, app, const Size(844, 390));
     expect(find.byType(NavigationBar), findsOneWidget);
@@ -33,6 +36,59 @@ void main() {
     expect(find.byType(NavigationBar), findsOneWidget);
     expect(find.byType(NavigationRail), findsNothing);
     expect(_hintWidth(tester), greaterThan(280));
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('a guest box shows the file size choices', (tester) async {
+    final app = _app();
+    app.profile = Profile(
+      uid: 'guest',
+      provider: 'anonymous',
+      storageBackend: 'google_cloud',
+      disabled: false,
+      admin: false,
+      createdAt: 0,
+      lastLoginAt: 0,
+      nickname: '손님',
+    );
+    await _pump(tester, app, const Size(390, 844));
+    expect(find.text('파일 하나 상한'), findsOneWidget);
+    expect(find.text('20MB'), findsOneWidget);
+    expect(find.byType(DropdownButton<int>), findsOneWidget);
+    expect(find.text('TempBox'), findsWidgets);
+    expect(tester.takeException(), isNull);
+
+    await _pump(tester, app, const Size(844, 390));
+    expect(find.text('파일 하나 상한'), findsOneWidget);
+    expect(find.byType(DropdownButton<int>), findsOneWidget);
+    expect(find.text('TempBox'), findsWidgets);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('guest entry screen hides the file size choices', (tester) async {
+    final app = _app();
+    app.profile = Profile(
+      uid: 'guest',
+      provider: 'anonymous',
+      storageBackend: 'google_cloud',
+      disabled: false,
+      admin: false,
+      createdAt: 0,
+      lastLoginAt: 0,
+      nickname: '손님',
+    );
+    tester.view.physicalSize = const Size(390, 844);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    await tester.pumpWidget(
+      MaterialApp(theme: TempTheme.light(), home: GuestPage(app: app)),
+    );
+    await tester.pump();
+    expect(find.text('파일 하나 상한'), findsNothing);
+    expect(find.text('Google Cloud'), findsNothing);
+    expect(find.byType(DropdownButton<int>), findsNothing);
+    expect(find.text('새 상자 열기'), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
 }

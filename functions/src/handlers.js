@@ -428,7 +428,7 @@ function createHandlers(store, options) {
       boxId: box.boxId,
       ownerUid: user.uid,
       kind: 'message',
-      text: '다른 기기에서 한 번 받아 보세요.',
+      text: 'Receive this once on another device.',
       fileName: null,
       mime: null,
       bytes: null,

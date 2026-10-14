@@ -5,6 +5,67 @@ import '../../entities/models.dart';
 import '../../features/app_controller.dart';
 import '../../shared/format.dart';
 
+class TempBoxMark extends StatelessWidget {
+  const TempBoxMark({super.key, this.fontSize = 46, this.bar = true});
+  final double fontSize;
+  final bool bar;
+
+  @override
+  Widget build(BuildContext context) {
+    final style = TextStyle(
+      fontSize: fontSize,
+      height: 1,
+      fontWeight: FontWeight.w800,
+      letterSpacing: fontSize > 32 ? -1.2 : -0.6,
+    );
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: bar ? CrossAxisAlignment.center : CrossAxisAlignment.start,
+      children: [
+        Text.rich(
+          TextSpan(
+            children: [
+              TextSpan(text: 'Temp', style: style.copyWith(color: TempColors.seal)),
+              TextSpan(text: 'Box', style: style.copyWith(color: TempColors.accent)),
+            ],
+          ),
+          textAlign: bar ? TextAlign.center : TextAlign.start,
+        ),
+        if (bar) ...[
+          const SizedBox(height: 10),
+          Container(
+            width: fontSize * 1.9,
+            height: 5,
+            decoration: BoxDecoration(
+              color: TempColors.seal,
+              borderRadius: BorderRadius.circular(3),
+            ),
+          ),
+        ],
+      ],
+    );
+  }
+}
+
+class LanguageChoices extends StatelessWidget {
+  const LanguageChoices({super.key, required this.app, this.alignment = WrapAlignment.start});
+  final AppController app;
+  final WrapAlignment alignment;
+
+  @override
+  Widget build(BuildContext context) {
+    return Wrap(
+      alignment: alignment,
+      spacing: 8,
+      children: [
+        TextButton(onPressed: () => app.setLocale('ko'), child: Text(app.l10n.tr('korean'))),
+        TextButton(onPressed: () => app.setLocale('en'), child: Text(app.l10n.tr('english'))),
+        TextButton(onPressed: () => app.setLocale('ja'), child: Text(app.l10n.tr('japanese'))),
+      ],
+    );
+  }
+}
+
 class SealMark extends StatelessWidget {
   const SealMark({super.key, this.size = 96});
   final double size;
@@ -150,11 +211,10 @@ class AppShell extends StatelessWidget {
     return Row(
       children: [
         Expanded(
-          child: Text(
-            app.l10n.tr('app'),
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w700, color: TempColors.seal),
+          child: FittedBox(
+            alignment: Alignment.centerLeft,
+            fit: BoxFit.scaleDown,
+            child: const TempBoxMark(fontSize: 28, bar: false),
           ),
         ),
         TextButton(onPressed: () => app.logout(), child: Text(app.l10n.tr('logout'))),
@@ -271,11 +331,10 @@ class AppShell extends StatelessWidget {
               child: Row(
                 children: [
                   Expanded(
-                    child: Text(
-                      app.l10n.tr('app'),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w700, color: TempColors.seal),
+                    child: FittedBox(
+                      alignment: Alignment.centerLeft,
+                      fit: BoxFit.scaleDown,
+                      child: const TempBoxMark(fontSize: 26, bar: false),
                     ),
                   ),
                   if (code.isNotEmpty)
@@ -354,7 +413,7 @@ class CloudShelf extends StatelessWidget {
     if (profile == null) return const SizedBox.shrink();
     final cap = cloudCaps.contains(profile.cloudMaxBytes) ? profile.cloudMaxBytes! : cloudCaps.first;
     final box = DropdownButton<int>(
-      isExpanded: !inline,
+      isExpanded: true,
       value: cap,
       items: [
         for (final option in cloudCaps) DropdownMenuItem(value: option, child: Text(driveCapLabel(option))),
@@ -366,45 +425,20 @@ class CloudShelf extends StatelessWidget {
               app.setShelf('google_cloud', value);
             },
     );
-    final check = CheckboxListTile(
-      contentPadding: EdgeInsets.zero,
-      dense: true,
-      visualDensity: VisualDensity.compact,
-      value: true,
-      controlAffinity: ListTileControlAffinity.leading,
-      title: Text(
-        app.l10n.tr('googleCloud'),
-        maxLines: 1,
-        overflow: TextOverflow.ellipsis,
-        style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w700),
-      ),
-      onChanged: (_) {},
-    );
-    if (inline) {
-      return LayoutBuilder(
-        builder: (context, constraints) {
-          final wide = constraints.maxWidth > 520;
-          final labelWidth = wide ? 210.0 : (constraints.maxWidth - 128).clamp(140.0, 260.0);
-          return Align(
-            alignment: Alignment.centerLeft,
-            child: Row(
-              children: [
-                SizedBox(width: labelWidth, child: check),
-                const SizedBox(width: 8),
-                SizedBox(width: 112, child: box),
-              ],
-            ),
-          );
-        },
-      );
-    }
     return Column(
       mainAxisSize: MainAxisSize.min,
-      crossAxisAlignment: CrossAxisAlignment.start,
+      crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        check,
-        Text(app.l10n.tr('cloudCap'), style: const TextStyle(fontSize: 13, color: TempColors.chatMeta)),
-        box,
+        Row(
+          children: [
+            const Icon(Icons.cloud_done_outlined, color: TempColors.seal, size: 22),
+            const SizedBox(width: 6),
+            Text(app.l10n.tr('googleCloud'), style: TextStyle(fontSize: inline ? 15 : 16, fontWeight: FontWeight.w700)),
+          ],
+        ),
+        const SizedBox(height: 2),
+        Text(app.l10n.tr('cloudCap'), style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700)),
+        SizedBox(width: double.infinity, child: box),
       ],
     );
   }

@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 
-import '../app/theme.dart';
 import '../features/app_controller.dart';
 import '../shared/widgets/common.dart';
 
@@ -21,7 +20,7 @@ class WelcomePage extends StatelessWidget {
                 children: [
                   const Center(child: BrandImage(path: '/brand/characters/box-keeper.png', height: 180)),
                   const SizedBox(height: 16),
-                  const _TempBoxMark(),
+                  const TempBoxMark(),
                   const SizedBox(height: 16),
                   Text(app.l10n.tr('lead'), textAlign: TextAlign.center, style: const TextStyle(fontSize: 16, height: 1.45)),
                   const SizedBox(height: 28),
@@ -31,14 +30,7 @@ class WelcomePage extends StatelessWidget {
                   const SizedBox(height: 12),
                   OutlinedButton(onPressed: app.openGuest, child: Text(app.l10n.tr('guestOpen'))),
                   const SizedBox(height: 20),
-                  Wrap(
-                    alignment: WrapAlignment.center,
-                    spacing: 8,
-                    children: [
-                      TextButton(onPressed: () => app.setLocale('ko'), child: Text(app.l10n.tr('korean'))),
-                      TextButton(onPressed: () => app.setLocale('en'), child: Text(app.l10n.tr('english'))),
-                    ],
-                  ),
+                  LanguageChoices(app: app, alignment: WrapAlignment.center),
                 ],
               ),
             ),
@@ -50,42 +42,6 @@ class WelcomePage extends StatelessWidget {
           ),
         ],
       ),
-    );
-  }
-}
-
-class _TempBoxMark extends StatelessWidget {
-  const _TempBoxMark();
-
-  @override
-  Widget build(BuildContext context) {
-    const style = TextStyle(
-      fontSize: 46,
-      height: 1,
-      fontWeight: FontWeight.w800,
-      letterSpacing: -1.2,
-    );
-    return Column(
-      children: [
-        Text.rich(
-          TextSpan(
-            children: [
-              TextSpan(text: 'Temp', style: style.copyWith(color: TempColors.seal)),
-              TextSpan(text: 'Box', style: style.copyWith(color: TempColors.accent)),
-            ],
-          ),
-          textAlign: TextAlign.center,
-        ),
-        const SizedBox(height: 10),
-        Container(
-          width: 88,
-          height: 5,
-          decoration: BoxDecoration(
-            color: TempColors.seal,
-            borderRadius: BorderRadius.circular(3),
-          ),
-        ),
-      ],
     );
   }
 }

@@ -76,7 +76,7 @@ class AppController extends ChangeNotifier {
 
   Future<void> boot() async {
     tools = createWebTools();
-    locale = tools.read('tempbox.locale') == 'en' ? 'en' : 'ko';
+    locale = _localeCode(tools.read('tempbox.locale'));
     l10n = L10n(locale);
     pairingCode = tools.read('tempbox.code');
     draft = tools.read('tempbox.draft') ?? '';
@@ -150,10 +150,16 @@ class AppController extends ChangeNotifier {
   }
 
   void setLocale(String code) {
-    locale = code == 'en' ? 'en' : 'ko';
+    locale = _localeCode(code);
     l10n = L10n(locale);
     tools.write('tempbox.locale', locale);
     notifyListeners();
+  }
+
+  String _localeCode(String? code) {
+    if (code == L10n.en) return L10n.en;
+    if (code == L10n.ja) return L10n.ja;
+    return L10n.ko;
   }
 
   void say(String message) {

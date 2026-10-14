@@ -6,14 +6,14 @@
 ## 1. 데스크톱 아이콘
 
 폴더: `web/brand/icons/desktop/`
-파일: `icon-256.png`, `icon-512.png`, `favicon-32.png`
+파일: `favicon.ico`, `favicon-32.png`, `icon-256.png`, `icon-512.png`
 
 장면: 베이지 배경의 닫힌 크라프트 상자와 뚜껑 중앙의 남색 봉인. 데스크톱 아이콘은 상자 주변에 여백을 둔다.
 
 ## 2. 모바일 아이콘
 
 폴더: `web/brand/icons/mobile/`
-파일: `apple-touch-180.png`, `icon-192.png`, `icon-512.png`
+파일: `apple-touch-180.png`, `icon-192.png`, `icon-512.png`, `maskable-192.png`, `maskable-512.png`
 
 장면: 베이지 배경의 닫힌 크라프트 상자와 뚜껑 중앙의 남색 봉인. 32px에서도 상자와 봉인 두 덩어리가 남게 여백을 줄인다.
 

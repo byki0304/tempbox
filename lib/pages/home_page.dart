@@ -146,14 +146,13 @@ class _HomePageState extends State<HomePage> {
       );
     }
     final nowMs = DateTime.now().millisecondsSinceEpoch;
-    final korean = app.locale != 'en';
     final children = <Widget>[];
     String? day;
     for (final item in items) {
       final key = seoulDayKey(item.createdAt);
       if (key != day) {
         day = key;
-        children.add(_dayChip(chatDayLabel(item.createdAt, nowMs, korean: korean)));
+        children.add(_dayChip(chatDayLabel(item.createdAt, nowMs, locale: app.locale)));
       }
       children.add(ItemCard(app: app, item: item));
     }

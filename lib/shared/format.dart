@@ -79,14 +79,19 @@ String seoulClock(int epochMs) {
 
 String seoulHm(int epochMs) => seoulClock(epochMs).substring(11);
 
-String chatDayLabel(int epochMs, int nowMs, {required bool korean}) {
+String chatDayLabel(int epochMs, int nowMs, {required String locale}) {
   final seoul = DateTime.fromMillisecondsSinceEpoch(epochMs, isUtc: true).add(const Duration(hours: 9));
   final today = DateTime.fromMillisecondsSinceEpoch(nowMs, isUtc: true).add(const Duration(hours: 9));
-  if (korean) {
-    if (seoul.year == today.year) return '${seoul.month}월 ${seoul.day}일';
+  final sameYear = seoul.year == today.year;
+  if (locale == 'ja') {
+    if (sameYear) return '${seoul.month}月${seoul.day}日';
+    return '${seoul.year}年${seoul.month}月${seoul.day}日';
+  }
+  if (locale == 'ko') {
+    if (sameYear) return '${seoul.month}월 ${seoul.day}일';
     return '${seoul.year}년 ${seoul.month}월 ${seoul.day}일';
   }
-  if (seoul.year == today.year) return '${seoul.month}/${seoul.day}';
+  if (sameYear) return '${seoul.month}/${seoul.day}';
   return '${seoul.year}-${seoul.month}-${seoul.day}';
 }
 
