@@ -210,6 +210,7 @@ class _HomePageState extends State<HomePage> {
             PopupMenuButton<String>(
               tooltip: app.l10n.tr('attach'),
               onSelected: (value) async {
+                FocusManager.instance.primaryFocus?.unfocus();
                 if (value == 'camera') {
                   await app.addFiles(const [], camera: true);
                 } else {

@@ -85,13 +85,32 @@ class BrowserWebTools implements WebTools {
     } else {
       input.multiple = true;
     }
+    // Keep the input in the document. A detached input's dialog is cancelled
+    // on the next DOM change, which is what closes the desktop file window
+    // as soon as the attach menu finishes closing.
+    input.style.position = 'fixed';
+    input.style.left = '0';
+    input.style.top = '0';
+    input.style.width = '1px';
+    input.style.height = '1px';
+    input.style.opacity = '0';
+    final body = web.document.body;
+    if (body == null) return [];
+    body.appendChild(input);
     final done = Completer<void>();
-    input.onchange = ((web.Event _) {
+    void finish(web.Event _) {
       if (!done.isCompleted) done.complete();
-    }).toJS;
-    input.click();
-    await done.future.timeout(const Duration(minutes: 2), onTimeout: () {});
-    return _fromList(input.files);
+    }
+    input.onchange = finish.toJS;
+    input.addEventListener('cancel', finish.toJS);
+    try {
+      await Future<void>.delayed(const Duration(milliseconds: 400));
+      input.click();
+      await done.future.timeout(const Duration(minutes: 2), onTimeout: () {});
+      return await _fromList(input.files);
+    } finally {
+      input.remove();
+    }
   }
 
   @override
