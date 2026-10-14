@@ -89,8 +89,62 @@ void main() {
     expect(find.text('Google Cloud'), findsNothing);
     expect(find.byType(DropdownButton<int>), findsNothing);
     expect(find.text('새 상자 열기'), findsOneWidget);
+    expect(find.text('To Home'), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
+
+  testWidgets('nickname and guest entry return home from the top right', (tester) async {
+    for (final size in const [Size(390, 844), Size(844, 390), Size(1280, 800)]) {
+      final nickname = _guestApp();
+      await _pumpPage(tester, size, NicknamePage(app: nickname));
+      _expectTopRight(tester, find.text('To Home'), size);
+      await tester.tap(find.text('To Home'));
+      await tester.pump();
+      expect(nickname.screen, Screen.welcome);
+      expect(nickname.profile, isNull);
+
+      final guest = _guestApp();
+      await _pumpPage(tester, size, GuestPage(app: guest));
+      _expectTopRight(tester, find.text('To Home'), size);
+      expect(find.text('새 상자 열기'), findsOneWidget);
+      await tester.tap(find.text('To Home'));
+      await tester.pump();
+      expect(guest.screen, Screen.welcome);
+      expect(guest.profile, isNull);
+    }
+  });
+}
+
+void _expectTopRight(WidgetTester tester, Finder finder, Size size) {
+  expect(finder, findsOneWidget);
+  final box = tester.getRect(finder);
+  expect(box.right, greaterThan(size.width * 0.75));
+  expect(box.top, lessThan(72));
+}
+
+Future<void> _pumpPage(WidgetTester tester, Size size, Widget page) async {
+  tester.view.physicalSize = size;
+  tester.view.devicePixelRatio = 1;
+  addTearDown(tester.view.resetPhysicalSize);
+  addTearDown(tester.view.resetDevicePixelRatio);
+  await tester.pumpWidget(MaterialApp(theme: TempTheme.light(), home: page));
+  await tester.pump();
+}
+
+AppController _guestApp() {
+  final app = AppController()..tools = _Tools();
+  app.screen = Screen.guest;
+  app.profile = Profile(
+    uid: 'guest',
+    provider: 'anonymous',
+    storageBackend: 'google_cloud',
+    disabled: false,
+    admin: false,
+    createdAt: 0,
+    lastLoginAt: 0,
+    nickname: '손님',
+  );
+  return app;
 }
 
 AppController _app() {

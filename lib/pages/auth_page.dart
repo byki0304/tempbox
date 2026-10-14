@@ -144,32 +144,41 @@ class _NicknamePageState extends State<NicknamePage> {
   Widget build(BuildContext context) {
     final app = widget.app;
     return Scaffold(
-      body: Center(
-        child: ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 420),
-          child: Padding(
-            padding: const EdgeInsets.all(24),
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Text(app.l10n.tr('nickname'), style: Theme.of(context).textTheme.titleLarge),
-                const SizedBox(height: 16),
-                TextField(
-                  controller: controller,
-                  decoration: InputDecoration(
-                    labelText: app.l10n.tr('nickname'),
-                    helperText: app.l10n.tr('nicknameHelp'),
-                    errorText: app.fieldError,
+      body: SafeArea(
+        child: Column(
+          children: [
+            _ToHomeButton(app: app),
+            Expanded(
+              child: Center(
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(maxWidth: 420),
+                  child: Padding(
+                    padding: const EdgeInsets.all(24),
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Text(app.l10n.tr('nickname'), style: Theme.of(context).textTheme.titleLarge),
+                        const SizedBox(height: 16),
+                        TextField(
+                          controller: controller,
+                          decoration: InputDecoration(
+                            labelText: app.l10n.tr('nickname'),
+                            helperText: app.l10n.tr('nicknameHelp'),
+                            errorText: app.fieldError,
+                          ),
+                        ),
+                        const SizedBox(height: 16),
+                        FilledButton(
+                          onPressed: app.busy ? null : () => app.saveNickname(controller.text),
+                          child: Text(app.l10n.tr('save')),
+                        ),
+                      ],
+                    ),
                   ),
                 ),
-                const SizedBox(height: 16),
-                FilledButton(
-                  onPressed: app.busy ? null : () => app.saveNickname(controller.text),
-                  child: Text(app.l10n.tr('save')),
-                ),
-              ],
+              ),
             ),
-          ),
+          ],
         ),
       ),
     );
@@ -196,28 +205,56 @@ class _GuestPageState extends State<GuestPage> {
   Widget build(BuildContext context) {
     final app = widget.app;
     return Scaffold(
-      body: Center(
-        child: ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 460),
-          child: Padding(
-            padding: const EdgeInsets.all(24),
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Text(app.l10n.tr('guestHint'), textAlign: TextAlign.center),
-                const SizedBox(height: 8),
-                Text(app.l10n.tr('lostCode'), textAlign: TextAlign.center),
-                const SizedBox(height: 20),
-                FilledButton(onPressed: app.busy ? null : app.createFreshBox, child: Text(app.l10n.tr('newBox'))),
-                const SizedBox(height: 12),
-                OutlinedButton(onPressed: app.busy ? null : _askCode, child: Text(app.l10n.tr('enterCode'))),
-                if (app.fieldError != null) ...[
-                  const SizedBox(height: 12),
-                  Text(app.fieldError!, textAlign: TextAlign.center, style: const TextStyle(color: TempColors.danger)),
-                ],
-              ],
+      body: SafeArea(
+        child: Column(
+          children: [
+            _ToHomeButton(app: app),
+            Expanded(
+              child: Center(
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(maxWidth: 460),
+                  child: Padding(
+                    padding: const EdgeInsets.all(24),
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Text(app.l10n.tr('guestHint'), textAlign: TextAlign.center),
+                        const SizedBox(height: 8),
+                        Text(app.l10n.tr('lostCode'), textAlign: TextAlign.center),
+                        const SizedBox(height: 20),
+                        FilledButton(onPressed: app.busy ? null : app.createFreshBox, child: Text(app.l10n.tr('newBox'))),
+                        const SizedBox(height: 12),
+                        OutlinedButton(onPressed: app.busy ? null : _askCode, child: Text(app.l10n.tr('enterCode'))),
+                        if (app.fieldError != null) ...[
+                          const SizedBox(height: 12),
+                          Text(app.fieldError!, textAlign: TextAlign.center, style: const TextStyle(color: TempColors.danger)),
+                        ],
+                      ],
+                    ),
+                  ),
+                ),
+              ),
             ),
-          ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _ToHomeButton extends StatelessWidget {
+  const _ToHomeButton({required this.app});
+  final AppController app;
+
+  @override
+  Widget build(BuildContext context) {
+    return Align(
+      alignment: Alignment.centerRight,
+      child: Padding(
+        padding: const EdgeInsets.only(top: 4, right: 12),
+        child: OutlinedButton(
+          onPressed: () => app.logout(),
+          child: Text(app.l10n.tr('toHome')),
         ),
       ),
     );

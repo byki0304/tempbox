@@ -176,6 +176,7 @@ class L10n {
       'providerGoogle': 'Google',
       'providerGuest': '비회원',
       'cancel': '취소',
+      'toHome': 'To Home',
     },
     en: {
       'app': 'TempBox',
@@ -334,6 +335,7 @@ class L10n {
       'providerGoogle': 'Google',
       'providerGuest': 'Guest',
       'cancel': 'Cancel',
+      'toHome': 'To Home',
     },
     ja: {
       'app': 'TempBox',
@@ -489,6 +491,7 @@ class L10n {
       'providerGoogle': 'Google',
       'providerGuest': 'ゲスト',
       'cancel': 'キャンセル',
+      'toHome': 'To Home',
     },
   };
 }
