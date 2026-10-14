@@ -23,14 +23,15 @@ void main() {
     expect(find.text('100MB'), findsOneWidget);
 
     await _pump(tester, app, const Size(844, 390));
-    expect(find.byType(NavigationBar), findsNothing);
+    expect(find.byType(NavigationBar), findsOneWidget);
     expect(find.byType(NavigationRail), findsNothing);
     expect(find.text('상자'), findsWidgets);
     expect(_hintWidth(tester), greaterThan(360));
     expect(tester.takeException(), isNull);
 
     await _pump(tester, app, const Size(740, 340));
-    expect(find.byType(NavigationBar), findsNothing);
+    expect(find.byType(NavigationBar), findsOneWidget);
+    expect(find.byType(NavigationRail), findsNothing);
     expect(_hintWidth(tester), greaterThan(280));
     expect(tester.takeException(), isNull);
   });

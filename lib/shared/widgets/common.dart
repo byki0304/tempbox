@@ -103,6 +103,8 @@ class PairingCodeLabel extends StatelessWidget {
           TextSpan(text: code, style: style.copyWith(letterSpacing: 1.1)),
         ],
       ),
+      maxLines: 1,
+      overflow: TextOverflow.ellipsis,
       textAlign: TextAlign.left,
     );
   }
@@ -252,49 +254,61 @@ class AppShell extends StatelessWidget {
           ],
         ),
       ),
-      bottomNavigationBar: NavigationBar(
-        height: 64,
-        selectedIndex: _index(app.screen),
-        onDestinationSelected: (index) => app.go([Screen.box, Screen.help, Screen.me][index]),
-        destinations: [
-          NavigationDestination(icon: const Icon(Icons.inventory_2_outlined), label: app.l10n.tr('box')),
-          NavigationDestination(icon: const Icon(Icons.menu_book_outlined), label: app.l10n.tr('help')),
-          NavigationDestination(icon: const Icon(Icons.person_outline), label: app.l10n.tr('my')),
-        ],
-      ),
+      bottomNavigationBar: _phoneNav(),
     );
   }
 
   Widget _landscape(BuildContext context) {
     final signedIn = app.profile != null && !app.profile!.isGuest;
+    final code = app.pairingCode ?? '';
     return Scaffold(
       body: SafeArea(
-        child: Row(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            _PhoneRail(app: app, index: _index(app.screen)),
-            const VerticalDivider(width: 1),
-            Expanded(
-              child: Column(
+            Padding(
+              padding: const EdgeInsets.fromLTRB(12, 2, 4, 0),
+              child: Row(
                 children: [
-                  Padding(
-                    padding: const EdgeInsets.fromLTRB(12, 4, 8, 0),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.stretch,
-                      children: [
-                        _titleRow(showMyPage: false),
-                        if ((app.pairingCode ?? '').isNotEmpty)
-                          PairingCodeLabel(code: app.pairingCode, label: app.l10n.tr('codeNumber')),
-                        if (signedIn) CloudShelf(app: app, inline: true),
-                      ],
+                  Expanded(
+                    child: Text(
+                      app.l10n.tr('app'),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w700, color: TempColors.seal),
                     ),
                   ),
-                  _stage(limitWidth: false),
+                  if (code.isNotEmpty)
+                    Flexible(
+                      child: PairingCodeLabel(code: code, label: app.l10n.tr('codeNumber')),
+                    ),
+                  TextButton(onPressed: () => app.logout(), child: Text(app.l10n.tr('logout'))),
                 ],
               ),
             ),
+            if (signedIn)
+              Padding(
+                padding: const EdgeInsets.fromLTRB(8, 0, 12, 0),
+                child: CloudShelf(app: app, inline: true),
+              ),
+            _stage(limitWidth: false),
           ],
         ),
       ),
+      bottomNavigationBar: _phoneNav(height: 56),
+    );
+  }
+
+  Widget _phoneNav({double height = 64}) {
+    return NavigationBar(
+      height: height,
+      selectedIndex: _index(app.screen),
+      onDestinationSelected: (index) => app.go([Screen.box, Screen.help, Screen.me][index]),
+      destinations: [
+        NavigationDestination(icon: const Icon(Icons.inventory_2_outlined), label: app.l10n.tr('box')),
+        NavigationDestination(icon: const Icon(Icons.menu_book_outlined), label: app.l10n.tr('help')),
+        NavigationDestination(icon: const Icon(Icons.person_outline), label: app.l10n.tr('my')),
+      ],
     );
   }
 
@@ -324,66 +338,6 @@ class SelectionActionButton extends StatelessWidget {
       ),
       child: Text(
         deleting ? app.l10n.tr('delete') : app.l10n.tr('selectAll'),
-      ),
-    );
-  }
-}
-
-class _PhoneRail extends StatelessWidget {
-  const _PhoneRail({required this.app, required this.index});
-  final AppController app;
-  final int index;
-
-  @override
-  Widget build(BuildContext context) {
-    const icons = [Icons.inventory_2_outlined, Icons.menu_book_outlined, Icons.person_outline];
-    final labels = [app.l10n.tr('box'), app.l10n.tr('help'), app.l10n.tr('my')];
-    return ColoredBox(
-      color: TempColors.surface,
-      child: SizedBox(
-        width: 84,
-        child: Column(
-          children: [
-            const SizedBox(height: 8),
-            for (var i = 0; i < icons.length; i++)
-              Padding(
-                padding: const EdgeInsets.symmetric(vertical: 4),
-                child: InkWell(
-                  borderRadius: BorderRadius.circular(12),
-                  onTap: () => app.go([Screen.box, Screen.help, Screen.me][i]),
-                  child: SizedBox(
-                    width: 72,
-                    child: Column(
-                      children: [
-                        DecoratedBox(
-                          decoration: BoxDecoration(
-                            color: i == index ? TempColors.seal : Colors.transparent,
-                            borderRadius: BorderRadius.circular(14),
-                          ),
-                          child: SizedBox(
-                            width: 44,
-                            height: 32,
-                            child: Icon(icons[i], size: 22, color: i == index ? Colors.white : TempColors.seal),
-                          ),
-                        ),
-                        const SizedBox(height: 2),
-                        Text(
-                          labels[i],
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: TextStyle(
-                            fontSize: 11,
-                            fontWeight: i == index ? FontWeight.w700 : FontWeight.w500,
-                            color: TempColors.seal,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-              ),
-          ],
-        ),
       ),
     );
   }
