@@ -21,6 +21,7 @@ const CLOUD_CAP_OPTIONS = [20, 100, 256, 512, 1024].map((mb) => mb * 1024 * 1024
 const CLOUD_DEFAULT_BYTES = 20 * 1024 * 1024;
 
 const KEEP_MS = 240 * 60 * 60 * 1000;
+const GUEST_KEEP_MS = 24 * 60 * 60 * 1000;
 const LOCK_MS = 10 * 60 * 1000;
 const ORPHAN_MS = 24 * 60 * 60 * 1000;
 const GUEST_ITEM_CAP = 30;
@@ -84,6 +85,7 @@ module.exports = {
   CLOUD_CAP_OPTIONS,
   CLOUD_DEFAULT_BYTES,
   KEEP_MS,
+  GUEST_KEEP_MS,
   LOCK_MS,
   ORPHAN_MS,
   GUEST_ITEM_CAP,

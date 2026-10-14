@@ -185,7 +185,7 @@ class AppShell extends StatelessWidget {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       PairingCodeLabel(code: app.pairingCode, label: app.l10n.tr('codeNumber')),
-                      if (app.profile != null && !app.profile!.isGuest) ...[
+                      if (app.profile != null) ...[
                         const SizedBox(height: 12),
                         CloudShelf(app: app),
                       ],
@@ -230,7 +230,7 @@ class AppShell extends StatelessWidget {
   }
 
   Widget _portrait(BuildContext context) {
-    final signedIn = app.profile != null && !app.profile!.isGuest;
+    final showShelf = app.profile != null;
     return Scaffold(
       body: SafeArea(
         child: Column(
@@ -245,7 +245,7 @@ class AppShell extends StatelessWidget {
                 padding: const EdgeInsets.fromLTRB(16, 4, 16, 0),
                 child: PairingCodeLabel(code: app.pairingCode, label: app.l10n.tr('codeNumber')),
               ),
-            if (signedIn)
+            if (showShelf)
               Padding(
                 padding: const EdgeInsets.fromLTRB(8, 0, 12, 0),
                 child: CloudShelf(app: app, inline: true),
@@ -259,7 +259,7 @@ class AppShell extends StatelessWidget {
   }
 
   Widget _landscape(BuildContext context) {
-    final signedIn = app.profile != null && !app.profile!.isGuest;
+    final showShelf = app.profile != null;
     final code = app.pairingCode ?? '';
     return Scaffold(
       body: SafeArea(
@@ -286,7 +286,7 @@ class AppShell extends StatelessWidget {
                 ],
               ),
             ),
-            if (signedIn)
+            if (showShelf)
               Padding(
                 padding: const EdgeInsets.fromLTRB(8, 0, 12, 0),
                 child: CloudShelf(app: app, inline: true),
@@ -351,8 +351,7 @@ class CloudShelf extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final profile = app.profile;
-    if (profile == null || profile.isGuest) return const SizedBox.shrink();
-    final enabled = profile.storageBackend == 'google_cloud';
+    if (profile == null) return const SizedBox.shrink();
     final cap = cloudCaps.contains(profile.cloudMaxBytes) ? profile.cloudMaxBytes! : cloudCaps.first;
     final box = DropdownButton<int>(
       isExpanded: !inline,
@@ -364,14 +363,14 @@ class CloudShelf extends StatelessWidget {
           ? null
           : (value) {
               if (value == null) return;
-              app.setShelf(enabled ? 'google_cloud' : 'firebase', value);
+              app.setShelf('google_cloud', value);
             },
     );
     final check = CheckboxListTile(
       contentPadding: EdgeInsets.zero,
       dense: true,
       visualDensity: VisualDensity.compact,
-      value: enabled,
+      value: true,
       controlAffinity: ListTileControlAffinity.leading,
       title: Text(
         app.l10n.tr('googleCloud'),
@@ -379,7 +378,7 @@ class CloudShelf extends StatelessWidget {
         overflow: TextOverflow.ellipsis,
         style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w700),
       ),
-      onChanged: app.offline ? null : (value) => app.setShelf(value == true ? 'google_cloud' : 'firebase', cap),
+      onChanged: (_) {},
     );
     if (inline) {
       return LayoutBuilder(

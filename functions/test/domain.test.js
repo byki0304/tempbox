@@ -5,7 +5,7 @@ const assert = require('node:assert/strict');
 const { MemoryStore } = require('../src/store');
 const { createHandlers, managementId } = require('../src/handlers');
 const { createLocalAuth } = require('../src/local-auth');
-const { assessUpload, KEEP_MS, BLAZE_OBJECT_MAX_BYTES, SPARK_STORAGE_BYTES } = require('../src/capacity');
+const { assessUpload, KEEP_MS, GUEST_KEEP_MS, BLAZE_OBJECT_MAX_BYTES, SPARK_STORAGE_BYTES } = require('../src/capacity');
 
 function world(env = {}, seedSamples = false) {
   const store = new MemoryStore();
@@ -28,15 +28,27 @@ async function guestBox(app, nickname = '손님') {
   return { session, created };
 }
 
-test('expiresAt is createdAt plus 240 hours and ignores the client', async () => {
+test('guest items expire after 24 hours and signed-in items after 240 hours', async () => {
   const app = world();
   const { session } = await guestBox(app);
-  const result = await app.handlers.createMessageItem(session.ctx, {
+  const guestItem = await app.handlers.createMessageItem(session.ctx, {
     text: '메모',
     expiresAt: 1,
     clientRequestId: 'req-create-01',
   });
-  assert.equal(result.item.expiresAt - result.item.createdAt, KEEP_MS);
+  assert.equal(guestItem.item.backend, 'google_cloud');
+  assert.equal(guestItem.item.expiresAt - guestItem.item.createdAt, GUEST_KEEP_MS);
+  app.clock.now += GUEST_KEEP_MS - 1000;
+  assert.equal((await app.handlers.purgeExpired()).removed, 0);
+  app.clock.now += 1001;
+  assert.equal((await app.handlers.purgeExpired()).removed, 1);
+
+  const signed = await app.auth.signup({ kind: 'email', email: 'keep@example.com', password: 'abc123' });
+  await app.handlers.setNickname(signed.ctx, { nickname: '회원', confirm: true });
+  await app.handlers.createBox(signed.ctx, {});
+  const signedItem = await app.handlers.createMessageItem(signed.ctx, { text: '오래', clientRequestId: 'req-keep-0001' });
+  assert.equal(signedItem.item.backend, 'google_cloud');
+  assert.equal(signedItem.item.expiresAt - signedItem.item.createdAt, KEEP_MS);
 });
 
 test('guest and signed stats increase separately and retries do not double', async () => {
@@ -113,7 +125,48 @@ test('executable types are rejected and html stays an attachment', async () => {
     (error) => error.code === 'type_rejected',
   );
   const begun = await app.handlers.beginFileUpload(session.ctx, { fileName: 'page.html', clientRequestId: 'req-html-001' });
-  assert.equal(begun.backend, 'firebase');
+  assert.equal(begun.backend, 'google_cloud');
+  assert.match(begun.storagePath, /^cloud\//);
+});
+
+test('a signed-in spark account can upload up to the selected file cap', async () => {
+  const app = world({ FIREBASE_PLAN: 'spark', STORAGE_BUDGET_BYTES: '' });
+  const signed = await app.auth.signup({ kind: 'email', email: 'up@example.com', password: 'abc123' });
+  await app.handlers.setNickname(signed.ctx, { nickname: '업로더', confirm: true });
+  await app.handlers.setStorageBackend(signed.ctx, { storageBackend: 'firebase', cloudMaxBytes: 100 * 1024 * 1024 });
+  await app.handlers.createBox(signed.ctx, {});
+  const begun = await app.handlers.beginFileUpload(signed.ctx, {
+    fileName: 'shot.jpg',
+    declaredBytes: 2 * 1024 * 1024,
+    clientRequestId: 'req-shot-0001',
+  });
+  assert.equal(begun.backend, 'google_cloud');
+  assert.equal(begun.maxBytes, 100 * 1024 * 1024);
+  assert.match(begun.storagePath, /^cloud\//);
+  await assert.rejects(
+    app.handlers.beginFileUpload(signed.ctx, {
+      fileName: 'big.jpg',
+      declaredBytes: 101 * 1024 * 1024,
+      clientRequestId: 'req-shot-0002',
+    }),
+    (error) => error.code === 'too_large',
+  );
+  const guest = await guestBox(app);
+  const guestFile = await app.handlers.beginFileUpload(guest.session.ctx, {
+    fileName: 'shot.jpg',
+    declaredBytes: 1000,
+    clientRequestId: 'req-guest-file',
+  });
+  assert.equal(guestFile.backend, 'google_cloud');
+  assert.equal(guestFile.maxBytes, 20 * 1024 * 1024);
+  const raised = await app.handlers.setStorageBackend(guest.session.ctx, { storageBackend: 'google_cloud', cloudMaxBytes: 1024 * 1024 * 1024 });
+  assert.equal(raised.profile.cloudMaxBytes, 1024 * 1024 * 1024);
+  const larger = await app.handlers.beginFileUpload(guest.session.ctx, {
+    fileName: 'wide.jpg',
+    declaredBytes: 500 * 1024 * 1024,
+    clientRequestId: 'req-guest-wide',
+  });
+  assert.equal(larger.maxBytes, 1024 * 1024 * 1024);
 });
 
 test('spark rejects any firebase byte and blaze enforces 90 percent and 80 percent', async () => {
@@ -195,14 +248,15 @@ test('file complete uses the stored size and drive files are deleted with the it
   await app.handlers.createBox(session.ctx, {});
   await app.handlers.setStorageBackend(session.ctx, { storageBackend: 'google_drive', driveMaxBytes: 128 * 1024 * 1024 });
   const begun = await app.handlers.beginFileUpload(session.ctx, { fileName: 'pic.png', clientRequestId: 'req-drive-001' });
-  assert.equal(begun.backend, 'google_drive');
+  assert.equal(begun.backend, 'google_cloud');
+  assert.match(begun.storagePath, /^cloud\//);
   await app.handlers.writeUpload(begun.uploadId, Buffer.from('12345'), false);
   const done = await app.handlers.completeFileUpload(session.ctx, { uploadId: begun.uploadId, driveFileId: begun.driveFileId, bytes: 99999 });
   assert.equal(done.item.bytes, 5);
-  assert.equal(await app.store.transact(async (tx) => tx.sumFirebaseBytes()), 0);
+  assert.equal(done.item.expiresAt - done.item.createdAt, KEEP_MS);
   const claim = await app.handlers.claimItem(session.ctx, { itemId: done.item.itemId });
   await app.handlers.ackItem(session.ctx, { itemId: done.item.itemId, claimToken: claim.claimToken });
-  assert.equal(await app.store.transact(async (tx) => tx.blobSize(`drive/${begun.driveFileId}`)), 0);
+  assert.equal(await app.store.transact(async (tx) => tx.blobSize(begun.storagePath)), 0);
 });
 
 test('purge removes expired items without keeping the body in stats', async () => {
@@ -225,10 +279,9 @@ test('signed-in google cloud keeps a message until download deletes it', async (
   await app.handlers.createBox(signed.ctx, {});
   const guest = await app.auth.guest();
   await app.handlers.setNickname(guest.ctx, { nickname: '손님둘', confirm: true });
-  await assert.rejects(
-    app.handlers.setStorageBackend(guest.ctx, { storageBackend: 'google_cloud', cloudMaxBytes: 20 * 1024 * 1024 }),
-    (error) => error.code === 'forbidden',
-  );
+  const guestCap = await app.handlers.setStorageBackend(guest.ctx, { storageBackend: 'google_cloud', cloudMaxBytes: 100 * 1024 * 1024 });
+  assert.equal(guestCap.profile.storageBackend, 'google_cloud');
+  assert.equal(guestCap.profile.cloudMaxBytes, 100 * 1024 * 1024);
   const saved = await app.handlers.setStorageBackend(signed.ctx, { storageBackend: 'google_cloud', cloudMaxBytes: 20 * 1024 * 1024 });
   assert.equal(saved.profile.storageBackend, 'google_cloud');
   assert.equal(saved.profile.cloudMaxBytes, 20 * 1024 * 1024);

@@ -7,6 +7,7 @@ const {
   CLOUD_CAP_OPTIONS,
   CLOUD_DEFAULT_BYTES,
   KEEP_MS,
+  GUEST_KEEP_MS,
   LOCK_MS,
   ORPHAN_MS,
   GUEST_ITEM_CAP,
@@ -218,6 +219,10 @@ function createHandlers(store, options) {
 
   function guestUser(user) {
     return user.provider === 'anonymous';
+  }
+
+  function keepFor(user) {
+    return guestUser(user) ? GUEST_KEEP_MS : KEEP_MS;
   }
 
   async function isAdmin(tx, ctx) {
@@ -509,6 +514,10 @@ function createHandlers(store, options) {
     });
   }
 
+  function selectedFileCap(user) {
+    return CLOUD_CAP_OPTIONS.includes(user.cloudMaxBytes) ? user.cloudMaxBytes : CLOUD_DEFAULT_BYTES;
+  }
+
   async function assertCapacity(tx, user, box, size, backend, pendingAdjust = 0) {
     const pending = (await tx.uploadsForBox(box.boxId)).length + pendingAdjust;
     const count = (await tx.countItems(box.boxId)) + pending;
@@ -516,15 +525,17 @@ function createHandlers(store, options) {
     if (count >= cap) {
       return 'quota_user';
     }
-    const used = backend === 'google_drive' || backend === 'google_cloud' ? 0 : await tx.sumFirebaseBytes();
+    const signedFile = backend === 'firebase' && !guestUser(user);
+    const judged = signedFile ? 'google_cloud' : backend;
+    const used = judged === 'google_drive' || judged === 'google_cloud' ? 0 : await tx.sumFirebaseBytes();
     return assessUpload({
       plan,
       rawBudget,
       usedBytes: used,
       size,
-      backend,
+      backend: judged,
       driveCap: user.driveMaxBytes || DRIVE_PRODUCT_MAX_BYTES,
-      cloudCap: user.cloudMaxBytes || CLOUD_DEFAULT_BYTES,
+      cloudCap: selectedFileCap(user),
     });
   }
 
@@ -560,9 +571,9 @@ function createHandlers(store, options) {
       const day = seoulDay(createdAt);
       const stat = (await tx.getStat(day)) || emptyStat();
       const counted = await tx.hasCounted(`created:${itemId}`);
-      const useCloud = user.storageBackend === 'google_cloud' && !guestUser(user);
-      const cloudCap = CLOUD_CAP_OPTIONS.includes(user.cloudMaxBytes) ? user.cloudMaxBytes : CLOUD_DEFAULT_BYTES;
-      if (useCloud && Buffer.byteLength(String(data.text), 'utf8') > cloudCap) await reject(tx, user, requestId, 'too_large');
+      const cloudCap = selectedFileCap(user);
+      const textBytes = Buffer.byteLength(String(data.text), 'utf8');
+      if (textBytes > cloudCap) await reject(tx, user, requestId, 'too_large');
       const item = {
         itemId,
         boxId: box.boxId,
@@ -571,20 +582,20 @@ function createHandlers(store, options) {
         text: data.text,
         fileName: null,
         mime: null,
-        bytes: useCloud ? Buffer.byteLength(String(data.text), 'utf8') : null,
-        backend: useCloud ? 'google_cloud' : null,
-        storagePath: useCloud ? `cloud/${ctx.uid}/${itemId}.txt` : null,
+        bytes: textBytes,
+        backend: 'google_cloud',
+        storagePath: `cloud/${ctx.uid}/${itemId}.txt`,
         driveFileId: null,
         thumbnailPath: null,
         status: 'available',
         lockExpiresAt: null,
         claimTokenHash: null,
         createdAt,
-        expiresAt: createdAt + KEEP_MS,
+        expiresAt: createdAt + keepFor(user),
         originDeviceId: cleanDeviceId(data.originDeviceId),
       };
       await tx.setItem(item);
-      if (useCloud) await tx.putBlob(item.storagePath, Buffer.from(String(data.text), 'utf8'));
+      await tx.putBlob(item.storagePath, Buffer.from(String(data.text), 'utf8'));
       if (!counted) {
         stat.created[guestUser(user) ? 'guest' : 'signed'] += 1;
         await tx.setCounted(`created:${itemId}`);
@@ -635,23 +646,13 @@ function createHandlers(store, options) {
       const room = (await tx.countItems(box.boxId)) + (await tx.uploadsForBox(box.boxId)).length;
       const cap = guestUser(user) ? GUEST_ITEM_CAP : SIGNED_ITEM_CAP;
       if (room >= cap) await reject(tx, user, requestId, 'quota_user');
-      let backend = 'firebase';
-      if (user.storageBackend === 'google_cloud' && !guestUser(user)) backend = 'google_cloud';
-      else if (user.storageBackend === 'google_drive' && user.provider === 'google') backend = 'google_drive';
+      const backend = 'google_cloud';
       const declared = Number(data.declaredBytes);
       if (Number.isFinite(declared) && declared > 0) {
         const early = await assertCapacity(tx, user, box, declared, backend);
         if (early) await reject(tx, user, requestId, early);
       }
-      const limits = limitsFor(plan, rawBudget);
-      const driveCap = DRIVE_CAP_OPTIONS.includes(user.driveMaxBytes) ? user.driveMaxBytes : DRIVE_PRODUCT_MAX_BYTES;
-      const cloudCap = CLOUD_CAP_OPTIONS.includes(user.cloudMaxBytes) ? user.cloudMaxBytes : CLOUD_DEFAULT_BYTES;
-      let maxBytes = backend === 'google_drive'
-        ? Math.min(driveCap, Math.floor(limits.drivePlatformMax * 0.9))
-        : backend === 'google_cloud'
-          ? cloudCap
-          : Math.min(limits.perFileMax, limits.planFileMax);
-      if (backend === 'firebase' && maxBytes <= 0) await reject(tx, user, requestId, 'plan_capacity');
+      const maxBytes = selectedFileCap(user);
       const uploadId = id();
       const upload = {
         uploadId,
@@ -671,33 +672,8 @@ function createHandlers(store, options) {
         fellBack: false,
         originDeviceId: cleanDeviceId(data.originDeviceId),
       };
-      if (backend === 'google_drive') {
-        const opened = await tx.openDriveUpload?.({
-          uploadId,
-          fileName,
-          mime: upload.mime,
-          ownerUid: ctx.uid,
-        });
-        if (!opened) {
-          backend = 'firebase';
-          upload.backend = 'firebase';
-          upload.fellBack = true;
-          maxBytes = Math.min(limits.perFileMax, limits.planFileMax);
-          upload.maxBytes = maxBytes;
-          if (maxBytes <= 0) await reject(tx, user, requestId, 'plan_capacity');
-        } else {
-          upload.driveFileId = opened.driveFileId || id();
-          upload.uploadUrl = opened.uploadUrl || `${origin}/upload/${uploadId}`;
-        }
-      }
-      if (upload.backend === 'google_cloud') {
-        upload.storagePath = `cloud/${ctx.uid}/${uploadId}`;
-        upload.uploadUrl = `${origin}/upload/${uploadId}`;
-      }
-      if (upload.backend === 'firebase') {
-        upload.storagePath = `uploads/${ctx.uid}/${uploadId}`;
-        upload.uploadUrl = `${origin}/upload/${uploadId}`;
-      }
+      upload.storagePath = `cloud/${ctx.uid}/${uploadId}`;
+      upload.uploadUrl = `${origin}/upload/${uploadId}`;
       upload.thumbUrl = `${origin}/upload/${uploadId}/thumb`;
       await tx.setUpload(upload);
       if (requestId) await tx.setRequest(requestId, { status: 'reserved', uploadId });
@@ -791,7 +767,7 @@ function createHandlers(store, options) {
         lockExpiresAt: null,
         claimTokenHash: null,
         createdAt,
-        expiresAt: createdAt + KEEP_MS,
+        expiresAt: createdAt + keepFor(user),
         originDeviceId: upload.originDeviceId || null,
       };
       await tx.setItem(item);
@@ -875,7 +851,16 @@ function createHandlers(store, options) {
     return store.transact(async (tx) => {
       const user = await requireUser(tx, ctx);
       if (user.disabled) throw fail('forbidden');
-      if (guestUser(user)) throw fail('forbidden');
+      if (guestUser(user)) {
+        const picked = Number(data.cloudMaxBytes);
+        if (!CLOUD_CAP_OPTIONS.includes(picked)) throw fail('invalid');
+        user.storageBackend = 'google_cloud';
+        user.cloudMaxBytes = picked;
+        const admin = await tx.getClaim(ctx.uid);
+        await tx.setUser(stripAdmin(user));
+        await audit(tx, ctx.uid, 'setStorageBackend', ctx.uid, ['storageBackend', 'cloudMaxBytes']);
+        return { profile: publicProfile(user, admin), driveOptions: DRIVE_CAP_OPTIONS.slice() };
+      }
       const wantsCloud = data.storageBackend === 'google_cloud';
       const wantsDrive = data.storageBackend === 'google_drive';
       if (wantsDrive && user.provider !== 'google') throw fail('forbidden');
