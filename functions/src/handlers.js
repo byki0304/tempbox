@@ -18,14 +18,6 @@ const {
 const { emptyStat } = require('./store');
 
 const REJECTED_EXT = new Set(['exe', 'bat', 'cmd', 'com', 'msi', 'dll', 'scr', 'ps1', 'sh', 'jar']);
-const ALLOWED_EXT = new Set([
-  'jpg', 'jpeg', 'png', 'gif', 'webp', 'heic', 'heif', 'bmp',
-  'mp4', 'mov', 'webm', 'mkv', 'm4v',
-  'mp3', 'm4a', 'wav', 'ogg', 'aac', 'flac',
-  'pdf', 'txt', 'md', 'csv', 'json', 'log', 'zip',
-  'doc', 'docx', 'xls', 'xlsx', 'ppt', 'pptx',
-  'apk', 'html', 'htm', 'svg',
-]);
 const ATTACHMENT_ONLY = new Set(['html', 'htm', 'svg', 'apk']);
 const EVENTS = ['created', 'claimed', 'deleted', 'expired', 'rejected'];
 
@@ -101,7 +93,9 @@ function mimeFor(ext) {
     mp4: 'video/mp4', mov: 'video/quicktime', webm: 'video/webm', mkv: 'video/x-matroska', m4v: 'video/mp4',
     mp3: 'audio/mpeg', m4a: 'audio/mp4', wav: 'audio/wav', ogg: 'audio/ogg', aac: 'audio/aac', flac: 'audio/flac',
     pdf: 'application/pdf', txt: 'text/plain', md: 'text/plain', csv: 'text/csv', json: 'application/json',
-    log: 'text/plain', zip: 'application/zip',
+    log: 'text/plain', zip: 'application/zip', tar: 'application/x-tar', gz: 'application/gzip',
+    tgz: 'application/gzip', '7z': 'application/x-7z-compressed', rar: 'application/vnd.rar',
+    bz2: 'application/x-bzip2', xz: 'application/x-xz',
     doc: 'application/msword',
     docx: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
     xls: 'application/vnd.ms-excel',
@@ -638,7 +632,7 @@ function createHandlers(store, options) {
       }
       const fileName = safeName(data.fileName);
       const ext = extOf(fileName);
-      if (REJECTED_EXT.has(ext) || !ALLOWED_EXT.has(ext)) await reject(tx, user, requestId, 'type_rejected');
+      if (REJECTED_EXT.has(ext)) await reject(tx, user, requestId, 'type_rejected');
       const textProblem = checkText(data.text, false);
       if (textProblem === 'invalid') await reject(tx, user, requestId, 'empty_message');
       const text = textProblem ? null : (data.text || null);

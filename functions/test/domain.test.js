@@ -117,16 +117,21 @@ test('lock returns to available after 10 minutes without ack', async () => {
   assert.ok(again.claimToken);
 });
 
-test('executable types are rejected and html stays an attachment', async () => {
+test('most files are accepted and executables stay rejected', async () => {
   const app = world();
   const { session } = await guestBox(app);
-  await assert.rejects(
-    app.handlers.beginFileUpload(session.ctx, { fileName: 'run.exe', clientRequestId: 'req-exe-0001' }),
-    (error) => error.code === 'type_rejected',
-  );
-  const begun = await app.handlers.beginFileUpload(session.ctx, { fileName: 'page.html', clientRequestId: 'req-html-001' });
-  assert.equal(begun.backend, 'google_cloud');
-  assert.match(begun.storagePath, /^cloud\//);
+  for (const name of ['run.exe', 'setup.BAT', 'tool.ps1']) {
+    await assert.rejects(
+      app.handlers.beginFileUpload(session.ctx, { fileName: name, clientRequestId: `req-bad-${name}` }),
+      (error) => error.code === 'type_rejected',
+    );
+  }
+  for (const name of ['page.html', 'bundle.zip', 'archive.tar', 'notes.tar.gz', 'data.bin', 'readme']) {
+    const begun = await app.handlers.beginFileUpload(session.ctx, { fileName: name, clientRequestId: `req-ok-${name}` });
+    assert.equal(begun.backend, 'google_cloud');
+    assert.match(begun.storagePath, /^cloud\//);
+    assert.equal(begun.mime, name.endsWith('.tar') ? 'application/x-tar' : begun.mime);
+  }
 });
 
 test('a signed-in spark account can upload up to the selected file cap', async () => {
